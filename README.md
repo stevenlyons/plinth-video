@@ -1,2 +1,2 @@
 # plinth-video
-A multi-platform Video Quality of Experience client
+A multi-platform Video monitoring and Quality of Experience client
