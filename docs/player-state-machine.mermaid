@@ -1,0 +1,77 @@
+---
+title: Video Player QoE State Machine
+---
+stateDiagram-v2
+
+    %% ── States ──────────────────────────────────────────────────────────────
+    %%
+    %%  Idle         No video source loaded; initial state after init or reset.
+    %%  Loading      Source assigned; fetching manifest / metadata.
+    %%  Ready        Metadata loaded; player paused at start position.
+    %%  PlayAttempt  play() called; awaiting first decoded frame.
+    %%               ⏱ VIDEO START TIME begins here.
+    %%               ⏱ WATCHED TIME begins here.
+    %%  Buffering    play() called but buffer is empty; downloading initial segment.
+    %%               ⏱ VIDEO START TIME continues accumulating.
+    %%  Playing      Frames actively being decoded and rendered.
+    %%               ⏱ PLAYED TIME accumulates.
+    %%  Paused       Playback suspended by user or system; position held.
+    %%  Seeking      Seek requested; position changing, frames not rendered.
+    %%  Rebuffering  Was Playing; buffer exhausted mid-playback; stalled.
+    %%               ⏱ REBUFFER TIME accumulates.
+    %%  Ended        Playback reached end of content naturally.
+    %%  Error        Fatal, unrecoverable player error.
+    %%
+    %%  WATCHED TIME spans all states from PlayAttempt until Ended or destroy().
+
+    [*] --> Idle : init
+
+    %% ── Loading ──────────────────────────────────────────────────────────────
+    Idle      --> Loading     : load(src)
+    Loading   --> Ready       : canPlay / metadata loaded
+    Loading   --> Error       : error event
+
+    %% ── Play Initiation ──────────────────────────────────────────────────────
+    Ready     --> PlayAttempt : play()
+    Ready     --> Idle        : destroy()
+
+    PlayAttempt --> Buffering : waiting (buffer empty)
+    PlayAttempt --> Playing   : firstFrame
+    PlayAttempt --> Error     : error event
+
+    Buffering   --> Playing   : firstFrame / canPlayThrough
+    Buffering   --> Error     : error event
+
+    %% ── Active Playback ──────────────────────────────────────────────────────
+    Playing --> Paused        : pause()
+    Playing --> Seeking       : seekStart
+    Playing --> Rebuffering   : waiting (buffer stall)
+    Playing --> Ended         : ended event
+    Playing --> Error         : error event
+
+    %% ── Paused ───────────────────────────────────────────────────────────────
+    Paused  --> PlayAttempt   : play()
+    Paused  --> Seeking       : seekStart
+    Paused  --> Idle          : destroy()
+
+    %% ── Seeking ──────────────────────────────────────────────────────────────
+    %% Guard tracks the state that was active when seekStart fired.
+    Seeking --> Playing       : seekEnd [guard: prev == Playing AND buffer ready]
+    Seeking --> Rebuffering   : seekEnd [guard: prev == Playing AND buffer empty]
+    Seeking --> Paused        : seekEnd [guard: prev == Paused]
+    Seeking --> Error         : error event
+
+    %% ── Rebuffering ──────────────────────────────────────────────────────────
+    Rebuffering --> Playing   : canPlayThrough / playing event
+    Rebuffering --> Paused    : pause()
+    Rebuffering --> Seeking   : seekStart
+    Rebuffering --> Error     : error event
+
+    %% ── Terminal / Reset ─────────────────────────────────────────────────────
+    Ended --> PlayAttempt     : play() [replay]
+    Ended --> Loading         : load(newSrc)
+    Ended --> Idle            : destroy() / reset()
+
+    Error --> Loading         : load(src) [retry]
+    Error --> Idle            : destroy() / reset()
+    Error --> [*]             : unrecoverable / GC

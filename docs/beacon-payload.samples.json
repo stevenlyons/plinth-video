@@ -1,0 +1,189 @@
+{
+  "_comment": "Sample beacon batches illustrating a complete play session lifecycle. All ts values are Unix epoch milliseconds (absolute).",
+
+  "session_open": {
+    "_label": "Batch 1 — sent at play() call. seq=0 is always session_open.",
+    "beacons": [
+      {
+        "seq": 0,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646400000,
+        "event": "session_open",
+        "video": {
+          "id": "bbb-720p",
+          "title": "Big Buck Bunny"
+        },
+        "client": {
+          "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        },
+        "sdk": {
+          "api_version": 1,
+          "core":      { "name": "vqe-core",  "version": "0.1.0" },
+          "framework": { "name": "vqe-web",   "version": "0.1.0" },
+          "player":    { "name": "vqe-hlsjs", "version": "0.1.0" }
+        }
+      }
+    ]
+  },
+
+  "first_frame_and_quality": {
+    "_label": "Batch 2 — flushed after first frame renders (~1.3s after play()). VST is now known.",
+    "beacons": [
+      {
+        "seq": 1,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646401280,
+        "event": "first_frame",
+        "state": "playing",
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 0,
+          "rebuffer_ms": 0,
+          "watched_ms": 1280,
+          "rebuffer_count": 0,
+          "error_count": 0
+        }
+      },
+      {
+        "seq": 2,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646401310,
+        "event": "quality_change",
+        "state": "playing",
+        "quality": {
+          "bitrate_bps": 2500000,
+          "width": 1280,
+          "height": 720,
+          "framerate": 29.97,
+          "codec": "avc1.4d401f"
+        },
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 30,
+          "rebuffer_ms": 0,
+          "watched_ms": 1310,
+          "rebuffer_count": 0,
+          "error_count": 0
+        }
+      }
+    ]
+  },
+
+  "heartbeat": {
+    "_label": "Batch 3 — periodic heartbeat at 10s interval. Player has been playing smoothly.",
+    "beacons": [
+      {
+        "seq": 3,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646411280,
+        "event": "heartbeat",
+        "state": "playing",
+        "playhead_ms": 10000,
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 10000,
+          "rebuffer_ms": 0,
+          "watched_ms": 11280,
+          "rebuffer_count": 0,
+          "error_count": 0
+        }
+      }
+    ]
+  },
+
+  "rebuffer": {
+    "_label": "Batch 4 — rebuffer at ~15s. Two beacons: rebuffer_start then rebuffer_end after 2.1s stall.",
+    "beacons": [
+      {
+        "seq": 4,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646415420,
+        "event": "rebuffer_start",
+        "state": "rebuffering",
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 14140,
+          "rebuffer_ms": 0,
+          "watched_ms": 15420,
+          "rebuffer_count": 1,
+          "error_count": 0
+        }
+      },
+      {
+        "seq": 5,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646417520,
+        "event": "rebuffer_end",
+        "state": "playing",
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 14140,
+          "rebuffer_ms": 2100,
+          "watched_ms": 17520,
+          "rebuffer_count": 1,
+          "error_count": 0
+        }
+      }
+    ]
+  },
+
+  "seek": {
+    "_label": "Batch 5 — user seeks forward while playing. seek_end lands back in playing state.",
+    "beacons": [
+      {
+        "seq": 6,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646422100,
+        "event": "seek_start",
+        "state": "seeking",
+        "seek_from_ms": 20580,
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 18440,
+          "rebuffer_ms": 2100,
+          "watched_ms": 22100,
+          "rebuffer_count": 1,
+          "error_count": 0
+        }
+      },
+      {
+        "seq": 7,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646422480,
+        "event": "seek_end",
+        "state": "playing",
+        "seek_from_ms": 20580,
+        "seek_to_ms": 60000,
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 18440,
+          "rebuffer_ms": 2100,
+          "watched_ms": 22480,
+          "rebuffer_count": 1,
+          "error_count": 0
+        }
+      }
+    ]
+  },
+
+  "session_end": {
+    "_label": "Batch N — video reaches natural end. Final metrics snapshot.",
+    "beacons": [
+      {
+        "seq": 24,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646996210,
+        "event": "session_end",
+        "state": "ended",
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 570400,
+          "rebuffer_ms": 2100,
+          "watched_ms": 596210,
+          "rebuffer_count": 1,
+          "error_count": 0
+        }
+      }
+    ]
+  }
+}
