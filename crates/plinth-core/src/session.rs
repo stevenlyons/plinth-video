@@ -1133,4 +1133,368 @@ mod tests {
         s.process_event(PlayerEvent::Play, 6000); // new session_open → seq=0
         assert_eq!(s.seq, 1); // next seq will be 1
     }
+
+    // ── Error-path transitions ────────────────────────────────────────────────
+
+    #[test]
+    fn loading_error_emits_error_beacon() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        let beacons = s.process_event(
+            PlayerEvent::Error { code: "MANIFEST_ERR".to_string(), message: None, fatal: true },
+            500,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::Error);
+        assert_eq!(beacons[0].error.as_ref().unwrap().code, "MANIFEST_ERR");
+    }
+
+    #[test]
+    fn play_attempt_error_emits_error_beacon_with_metrics() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        let beacons = s.process_event(
+            PlayerEvent::Error { code: "DECODE_ERR".to_string(), message: None, fatal: true },
+            1000,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::Error);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.error_count, 1);
+        assert_eq!(m.watched_ms, 1000);
+    }
+
+    #[test]
+    fn buffering_error_emits_error_beacon() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        s.process_event(PlayerEvent::Waiting, 0); // → Buffering
+        let beacons = s.process_event(
+            PlayerEvent::Error { code: "NETWORK_ERR".to_string(), message: None, fatal: true },
+            2000,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::Error);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.watched_ms, 2000);
+    }
+
+    #[test]
+    fn seeking_error_emits_error_beacon_and_clears_seek_state() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5000 }, 5000);
+        let beacons = s.process_event(
+            PlayerEvent::Error { code: "SEEK_ERR".to_string(), message: None, fatal: true },
+            5500,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::Error);
+        // Seek from next session should not carry stale from_ms
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 6000);
+        s.process_event(PlayerEvent::CanPlay, 6000);
+        let open = s.process_event(PlayerEvent::Play, 6000);
+        assert_eq!(open[0].seq, 0, "new session should reset seq");
+    }
+
+    #[test]
+    fn rebuffering_error_stops_rebuffer_timer_in_metrics() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Waiting, 5000); // rebuffer starts
+        let beacons = s.process_event(
+            PlayerEvent::Error { code: "STALL_ERR".to_string(), message: None, fatal: true },
+            7000,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        // rebuffer timer should have been stopped: 7000 - 5000 = 2000ms
+        assert_eq!(m.rebuffer_ms, 2000);
+        assert_eq!(m.rebuffer_count, 1);
+    }
+
+    // ── Error recovery paths ──────────────────────────────────────────────────
+
+    #[test]
+    fn error_load_retries_to_loading() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(
+            PlayerEvent::Error { code: "ERR".to_string(), message: None, fatal: true },
+            5000,
+        );
+        assert_eq!(s.state(), PlayerState::Error);
+        let beacons = s.process_event(PlayerEvent::Load { src: "retry.m3u8".into() }, 6000);
+        assert_eq!(s.state(), PlayerState::Loading);
+        assert!(beacons.is_empty(), "load from error emits no beacon");
+    }
+
+    #[test]
+    fn error_destroy_goes_to_idle() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(
+            PlayerEvent::Error { code: "ERR".to_string(), message: None, fatal: true },
+            5000,
+        );
+        let beacons = s.process_event(PlayerEvent::Destroy, 6000);
+        assert_eq!(s.state(), PlayerState::Idle);
+        assert!(beacons.is_empty(), "destroy from error emits no beacon");
+    }
+
+    // ── Additional reset / destroy paths ────────────────────────────────────
+
+    #[test]
+    fn ready_destroy_goes_to_idle_without_beacon() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        let beacons = s.process_event(PlayerEvent::Destroy, 1000);
+        assert_eq!(s.state(), PlayerState::Idle);
+        assert!(beacons.is_empty(), "no session started, no beacon expected");
+    }
+
+    #[test]
+    fn paused_destroy_via_process_event_emits_session_end() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 5000);
+        let beacons = s.process_event(PlayerEvent::Destroy, 8000);
+        assert_eq!(s.state(), PlayerState::Idle);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.watched_ms, 8000);
+    }
+
+    #[test]
+    fn ended_destroy_goes_to_idle_without_extra_beacon() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Ended, 5000);
+        let beacons = s.process_event(PlayerEvent::Destroy, 6000);
+        assert_eq!(s.state(), PlayerState::Idle);
+        assert!(beacons.is_empty(), "session already ended, no extra beacon");
+    }
+
+    #[test]
+    fn ended_load_new_src_goes_to_loading() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Ended, 5000);
+        s.process_event(PlayerEvent::Load { src: "new.m3u8".into() }, 6000);
+        assert_eq!(s.state(), PlayerState::Loading);
+    }
+
+    #[test]
+    fn can_play_through_from_play_attempt_triggers_first_frame() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        // CanPlayThrough directly from PlayAttempt (no Waiting first)
+        let beacons = s.process_event(PlayerEvent::CanPlayThrough, 800);
+        assert_eq!(s.state(), PlayerState::Playing);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::FirstFrame);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.vst_ms, Some(800));
+    }
+
+    // ── play_id / session identity ────────────────────────────────────────────
+
+    #[test]
+    fn play_id_looks_like_uuid_v4() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        // pull play_id from the session_open beacon
+        // (we need to re-run to capture it — use a fresh session)
+        let mut s2 = make_session();
+        s2.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s2.process_event(PlayerEvent::CanPlay, 0);
+        let beacons = s2.process_event(PlayerEvent::Play, 0);
+        let play_id = &beacons[0].play_id;
+        let parts: Vec<&str> = play_id.split('-').collect();
+        assert_eq!(parts.len(), 5, "UUID should have 5 parts: {}", play_id);
+        assert_eq!(parts[0].len(), 8);
+        assert_eq!(parts[1].len(), 4);
+        assert_eq!(parts[2].len(), 4);
+        assert_eq!(parts[3].len(), 4);
+        assert_eq!(parts[4].len(), 12);
+        assert!(play_id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
+    }
+
+    #[test]
+    fn play_ids_are_unique_across_sessions() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        let b1 = s.process_event(PlayerEvent::Play, 0);
+        let id1 = b1[0].play_id.clone();
+
+        s.process_event(PlayerEvent::FirstFrame, 1000);
+        s.process_event(PlayerEvent::Ended, 5000);
+
+        let b2 = s.process_event(PlayerEvent::Play, 6000);
+        let id2 = b2[0].play_id.clone();
+
+        assert_ne!(id1, id2, "each session must get a distinct play_id");
+    }
+
+    #[test]
+    fn all_beacons_in_session_share_play_id() {
+        let mut s = make_session();
+        let all = reach_playing(&mut s, 0);
+        let play_id = &all[0].play_id;
+        for b in &all {
+            assert_eq!(&b.play_id, play_id, "beacon seq={} has wrong play_id", b.seq);
+        }
+    }
+
+    // ── Heartbeat additional coverage ────────────────────────────────────────
+
+    #[test]
+    fn multiple_heartbeats_have_incrementing_seq() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0); // seq 0, 1
+        let h1 = s.tick(10_000);
+        let h2 = s.tick(20_000);
+        assert_eq!(h1[0].seq + 1, h2[0].seq);
+    }
+
+    #[test]
+    fn heartbeat_metrics_advance_with_time() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0); // first_frame at t=1000
+        let h1 = s.tick(10_000);
+        let h2 = s.tick(20_000);
+        let m1 = h1[0].metrics.as_ref().unwrap();
+        let m2 = h2[0].metrics.as_ref().unwrap();
+        assert!(m2.played_ms > m1.played_ms, "played_ms should grow: {} > {}", m2.played_ms, m1.played_ms);
+        assert!(m2.watched_ms > m1.watched_ms);
+    }
+
+    #[test]
+    fn heartbeat_state_reflects_current_state() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 3000);
+        let h = s.tick(15_000);
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].state, Some(PlayerState::Paused));
+    }
+
+    #[test]
+    fn heartbeat_emits_during_rebuffering() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Waiting, 5000); // → Rebuffering
+        let h = s.tick(15_000);
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].state, Some(PlayerState::Rebuffering));
+        let m = h[0].metrics.as_ref().unwrap();
+        assert_eq!(m.rebuffer_ms, 10_000); // rebuffer running since t=5000
+    }
+
+    #[test]
+    fn tick_does_not_emit_during_idle_or_loading() {
+        let mut s = make_session();
+        assert!(s.tick(100_000).is_empty(), "Idle: no heartbeat");
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        assert!(s.tick(100_000).is_empty(), "Loading: no heartbeat");
+        s.process_event(PlayerEvent::CanPlay, 0);
+        assert!(s.tick(100_000).is_empty(), "Ready: no heartbeat");
+    }
+
+    // ── Sample fixture shapes ────────────────────────────────────────────────
+
+    #[test]
+    fn rebuffer_sample_fixture_shape() {
+        // Mirrors docs/beacon-payload.samples.json "rebuffer" batch shape.
+        let mut s = make_session();
+        let all = reach_playing(&mut s, 0); // seq=0 session_open, seq=1 first_frame
+        let _ = all;
+
+        // rebuffer_start (seq=2)
+        let bs = s.process_event(PlayerEvent::Waiting, 15_000);
+        assert_eq!(bs[0].event, BeaconEvent::RebufferStart);
+        assert_eq!(bs[0].seq, 2);
+        let m = bs[0].metrics.as_ref().unwrap();
+        assert_eq!(m.rebuffer_count, 1);
+        assert_eq!(m.rebuffer_ms, 0); // just started
+
+        // rebuffer_end 2100ms later (seq=3)
+        let bs = s.process_event(PlayerEvent::CanPlayThrough, 17_100);
+        assert_eq!(bs[0].event, BeaconEvent::RebufferEnd);
+        assert_eq!(bs[0].seq, 3);
+        assert_eq!(bs[0].state, Some(PlayerState::Playing));
+        let m = bs[0].metrics.as_ref().unwrap();
+        assert_eq!(m.rebuffer_ms, 2100);
+        assert_eq!(m.rebuffer_count, 1);
+        assert_eq!(m.vst_ms, Some(1000));
+    }
+
+    #[test]
+    fn seek_sample_fixture_shape() {
+        // Mirrors docs/beacon-payload.samples.json "seek" batch shape.
+        let mut s = make_session();
+        reach_playing(&mut s, 0); // seq=0, seq=1
+
+        // seek_start (seq=2)
+        let bs = s.process_event(PlayerEvent::SeekStart { from_ms: 20_580 }, 22_100);
+        assert_eq!(bs[0].event, BeaconEvent::SeekStart);
+        assert_eq!(bs[0].seq, 2);
+        assert_eq!(bs[0].seek_from_ms, Some(20_580));
+        assert!(bs[0].seek_to_ms.is_none());
+
+        // seek_end (seq=3) resolves to playing with buffer ready
+        let bs = s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: true },
+            22_480,
+        );
+        assert_eq!(bs[0].event, BeaconEvent::SeekEnd);
+        assert_eq!(bs[0].seq, 3);
+        assert_eq!(bs[0].seek_from_ms, Some(20_580));
+        assert_eq!(bs[0].seek_to_ms, Some(60_000));
+        assert_eq!(bs[0].state, Some(PlayerState::Playing));
+    }
+
+    #[test]
+    fn session_end_sample_fixture_shape() {
+        // Mirrors docs/beacon-payload.samples.json "session_end" batch shape.
+        let mut s = make_session();
+        reach_playing(&mut s, 0); // first_frame at t=1000
+        let bs = s.process_event(PlayerEvent::Ended, 120_000);
+        assert_eq!(bs[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(bs[0].state, Some(PlayerState::Ended));
+        let m = bs[0].metrics.as_ref().unwrap();
+        assert!(m.vst_ms.is_some());
+        // watched_ms spans from play_attempt (t=0) to ended (t=120_000)
+        assert_eq!(m.watched_ms, 120_000);
+        // played_ms: first_frame at t=1000, ended at t=120_000 → 119_000ms
+        assert_eq!(m.played_ms, 119_000);
+    }
+
+    #[test]
+    fn session_open_beacon_contains_sdk_metadata() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        let beacons = s.process_event(PlayerEvent::Play, 0);
+        let json = serde_json::to_string(&beacons[0]).unwrap();
+        assert!(json.contains("\"api_version\":1"));
+        assert!(json.contains("plinth-core"));
+        assert!(json.contains("plinth-js"));
+        assert!(json.contains("plinth-hlsjs"));
+        assert!(json.contains("TestAgent/1.0"));
+        assert!(json.contains("vid-001"));
+    }
 }
