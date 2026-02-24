@@ -1,0 +1,20 @@
+{
+  "name": "@plinth/hlsjs",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@plinth/js": "workspace:*"
+  },
+  "peerDependencies": {
+    "hls.js": "^1.0.0"
+  },
+  "devDependencies": {
+    "hls.js": "^1.0.0",
+    "typescript": "^5.0.0",
+    "@types/bun": "latest"
+  }
+}
