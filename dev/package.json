@@ -1,0 +1,17 @@
+{
+  "name": "@plinth/dev",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run server.ts"
+  },
+  "dependencies": {
+    "@plinth/hlsjs": "workspace:*",
+    "@plinth/js": "workspace:*",
+    "hls.js": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
