@@ -73,12 +73,16 @@ A proof-of-concept SDK framework for measuring Video Quality of Experience acros
 - [x] Write 18 unit tests (all passing) with synchronous `beaconHandler` test seam
 - [x] Write `scripts/build-xcframework.sh` — builds for iOS device, iOS simulator (arm64+x86_64), macOS (arm64+x86_64)
 
-### Phase 5 — AVPlayer Integration (iOS)
+### Phase 5 — AVPlayer Integration (`plinth-avplayer`)
 
-- [ ] Implement `PlintheAVPlayer` with `initialize`, `updateMetadata`, `destroy` API
-- [ ] Map AVPlayer/AVPlayerItem KVO and notifications to core PlayerEvents
-- [ ] Forward scrubber position (currentTime) to core
-- [ ] Verify beacon submission end-to-end on device/simulator
+- [x] Add `PlinthAVPlayer` target + `PlinthAVPlayerTests` to `packages/plinth-swift/Package.swift`
+- [x] Implement `PlinthAVPlayer.swift` with `initialize(player:videoMeta:options:)` + `seek(to:)` + `destroy()` API
+- [x] Map AVPlayer KVO (`currentItem`, `timeControlStatus`, `rate`, `AVPlayerItem.status`) to core PlayerEvents
+- [x] Map AVFoundation notifications (`AVPlayerItemDidPlayToEndTime`, `AVPlayerItemFailedToPlayToEndTime`, `AVPlayerItemNewAccessLogEntry`) to core PlayerEvents
+- [x] Forward playhead via `addPeriodicTimeObserver` → `session.setPlayhead`
+- [x] Track `hasFiredFirstFrame` to distinguish first play from resume/rebuffer-recovery
+- [x] Suppress false Pause beacon when item ends naturally (`isEndingNaturally` flag)
+- [x] Write 24 unit tests via internal `handle*` methods — all passing (42 total Swift tests)
 
 ### Phase 7 — Documentation & Developer Experience
 
