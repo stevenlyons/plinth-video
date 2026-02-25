@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "PlinthSwift", targets: ["PlinthSwift"]),
+        .library(name: "PlinthAVPlayer", targets: ["PlinthAVPlayer"]),
     ],
     targets: [
         // C bridging target — exposes the plinth_core.h header to Swift.
@@ -33,6 +34,22 @@ let package = Package(
         .testTarget(
             name: "PlinthSwiftTests",
             dependencies: ["PlinthSwift"],
+            linkerSettings: [
+                .linkedLibrary("plinth_core"),
+                .unsafeFlags(["-L../../target/debug"]),
+            ]
+        ),
+
+        // AVPlayer player integration (Layer 3).
+        .target(
+            name: "PlinthAVPlayer",
+            dependencies: ["PlinthSwift"]
+        ),
+
+        // AVPlayer integration tests.
+        .testTarget(
+            name: "PlinthAVPlayerTests",
+            dependencies: ["PlinthAVPlayer"],
             linkerSettings: [
                 .linkedLibrary("plinth_core"),
                 .unsafeFlags(["-L../../target/debug"]),
