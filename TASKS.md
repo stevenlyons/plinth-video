@@ -95,10 +95,10 @@ A proof-of-concept SDK framework for measuring Video Quality of Experience acros
 
 ### Phase 7 — Documentation & Developer Experience
 
-- [ ] Write quick-start guide for Hls.js integration
-- [ ] Document player-specific SDK API (initialize, updateMetadata, destroy)
-- [ ] Document beacon payload schema
-- [ ] Document how to add a new player integration
+- [x] Write quick-start guide for Hls.js integration
+- [x] Document player-specific SDK API (initialize, updateMetadata, destroy)
+- [x] Document beacon payload schema
+- [x] Document how to add a new player integration
 
 ---
 
