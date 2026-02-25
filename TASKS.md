@@ -64,10 +64,14 @@ A proof-of-concept SDK framework for measuring Video Quality of Experience acros
 
 ### Phase 4 — Swift/iOS Platform Framework (`plinth-swift`)
 
-- [ ] Set up Swift Package with XCFramework dependency on Rust native lib
-- [ ] Implement Swift FFI bindings to Rust core C API
-- [ ] Implement platform bindings: URLSession HTTP, Timer, Date
-- [ ] Expose platform framework protocol/interface
+- [x] Add `staticlib` to `plinth-core` crate types
+- [x] Implement C FFI layer (`src/ffi.rs`) — 6 `extern "C"` functions with JSON-over-FFI boundary
+- [x] Write C header (`plinth_core.h`) + `module.modulemap` for Swift Package Manager
+- [x] Set up `packages/plinth-swift/` Swift package (Package.swift, systemLibrary + Swift target)
+- [x] Implement `PlinthConfig`, `SessionMeta`, `PlayerEvent`, `Beacon`, `Poster` Swift types
+- [x] Implement `PlinthSession.swift` wrapping C FFI with `DispatchSourceTimer` heartbeat + URLSession POST
+- [x] Write 18 unit tests (all passing) with synchronous `beaconHandler` test seam
+- [x] Write `scripts/build-xcframework.sh` — builds for iOS device, iOS simulator (arm64+x86_64), macOS (arm64+x86_64)
 
 ### Phase 5 — AVPlayer Integration (iOS)
 

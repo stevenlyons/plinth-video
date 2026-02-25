@@ -1,0 +1,4 @@
+module PlinthCoreFFI {
+    header "plinth_core.h"
+    export *
+}
