@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **plinth-video** is a multi-platform Video Quality of Experience (QoE) SDK framework — a proof-of-concept. It measures playback metrics (Video Start Time, Rebuffer Time, Played Time, Watched Time) and reports them via HTTP beacons.
 
+## Process
+
+New features will have a Product Requirements Document (PRD) added to the docs/prd directory. The PRD will list the high-level requirements, goals, and experience expectations of the feature. From the information in the PRD, create a matching Technical Design Document (TDD) that includes architecture, technical information, data types, build commands, and other information. The TDD documents should be put in the docs/tdd directory and named the same as the source PRD document. 
+
 ## Architecture
 
 Three-layer architecture designed to minimize per-platform maintenance:
