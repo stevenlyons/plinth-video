@@ -2,23 +2,40 @@ import { join } from "path";
 
 const distDir = join(import.meta.dir, "dist");
 
-// Build the client bundle on startup
-const buildResult = await Bun.build({
-  entrypoints: [join(import.meta.dir, "main.ts")],
-  outdir: distDir,
-  target: "browser",
-  minify: true,
-  external: ["hls.js"],
-});
+// Build both client bundles on startup
+const [hlsBuildResult, shakaBuildResult] = await Promise.all([
+  Bun.build({
+    entrypoints: [join(import.meta.dir, "main.ts")],
+    outdir: distDir,
+    target: "browser",
+    minify: true,
+    external: ["hls.js"],
+  }),
+  Bun.build({
+    entrypoints: [join(import.meta.dir, "shaka-main.ts")],
+    outdir: distDir,
+    target: "browser",
+    minify: true,
+  }),
+]);
 
-if (!buildResult.success) {
-  console.error("[build] Failed:");
-  for (const msg of buildResult.logs) {
+if (!hlsBuildResult.success) {
+  console.error("[build] hls failed:");
+  for (const msg of hlsBuildResult.logs) {
     console.error(" ", msg);
   }
   process.exit(1);
 }
-console.log("[build] Done —", buildResult.outputs.map((o) => o.path).join(", "));
+console.log("[build] hls done —", hlsBuildResult.outputs.map((o) => o.path).join(", "));
+
+if (!shakaBuildResult.success) {
+  console.error("[build] shaka failed:");
+  for (const msg of shakaBuildResult.logs) {
+    console.error(" ", msg);
+  }
+  process.exit(1);
+}
+console.log("[build] shaka done —", shakaBuildResult.outputs.map((o) => o.path).join(", "));
 
 // Copy wasm binary alongside the bundle (Bun bundler keeps the new URL() pattern
 // but doesn't auto-copy the .wasm file into outdir)
@@ -48,6 +65,14 @@ Bun.serve({
       const body = await req.json();
       console.log("[beacon]", JSON.stringify(body, null, 2));
       return new Response("OK", { status: 200, headers: CORS_HEADERS });
+    }
+
+    // Serve shaka.html for /shaka
+    if (req.method === "GET" && url.pathname === "/shaka") {
+      const file = Bun.file(join(import.meta.dir, "shaka.html"));
+      return new Response(file, {
+        headers: { "Content-Type": "text/html", ...CORS_HEADERS },
+      });
     }
 
     // Serve index.html for root
