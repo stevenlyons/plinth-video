@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "plinth-swift",
+          "kind" : "fileSystem",
+          "location" : "/Users/steven/Developer/plinth-video/packages/apple/plinth-swift",
+          "name" : "PlinthSwift"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/steven/Developer/plinth-video/packages/apple/plinth-swift"
+        },
+        "subpath" : "plinth-swift"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

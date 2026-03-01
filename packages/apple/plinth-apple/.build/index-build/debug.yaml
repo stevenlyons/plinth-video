@@ -1,0 +1,91 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "PlinthApple-arm64-apple-macosx26.0-debug.module": ["<PlinthApple-arm64-apple-macosx26.0-debug.module>"]
+  "PlinthApplePackageTests-arm64-apple-macosx26.0-debug.module": ["<PlinthApplePackageTests-arm64-apple-macosx26.0-debug.module>"]
+  "PlinthAppleTests-arm64-apple-macosx26.0-debug.module": ["<PlinthAppleTests-arm64-apple-macosx26.0-debug.module>"]
+  "main": ["<PlinthApple-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<PlinthApple-arm64-apple-macosx26.0-debug.module>","<PlinthAppleTests-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthCoreFFI/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Tests/PlinthAppleTests/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/Beacon.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlayerEvent.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlinthConfig.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlinthSession.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/Poster.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/SessionMeta.swift"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/sources"]
+    description: "Write auxiliary file /Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/sources"
+
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.derived/runner.swift"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/sources"]
+    description: "Write auxiliary file /Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/sources"
+
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Tests/PlinthAppleTests/PlinthSessionTests.swift"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/sources"]
+    description: "Write auxiliary file /Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/sources"
+
+  "/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt"
+
+  "<PlinthApple-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApple.swiftmodule"]
+    outputs: ["<PlinthApple-arm64-apple-macosx26.0-debug.module>"]
+
+  "<PlinthApplePackageTests-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApplePackageTests.swiftmodule"]
+    outputs: ["<PlinthApplePackageTests-arm64-apple-macosx26.0-debug.module>"]
+
+  "<PlinthAppleTests-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthAppleTests.swiftmodule"]
+    outputs: ["<PlinthAppleTests-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.PlinthApple-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/Beacon.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlayerEvent.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlinthConfig.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/PlinthSession.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/Poster.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/SessionMeta.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/sources"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApple.swiftmodule"]
+    description: "Compiling Swift Module 'PlinthApple' (6 sources)"
+    args: ["/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","PlinthApple","-emit-dependencies","-emit-module","-emit-module-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApple.swiftmodule","-output-file-map","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/output-file-map.json","-parse-as-library","-incremental","@/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/sources","-I","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx13.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-Xcc","-fmodule-map-file=/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthCoreFFI/module.modulemap","-module-cache-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApple.build/include/PlinthApple-Swift.h","-swift-version","5","-Xfrontend","-experimental-lazy-typecheck","-Xfrontend","-experimental-skip-all-function-bodies","-Xfrontend","-experimental-allow-module-with-compiler-errors","-Xfrontend","-empty-abi-descriptor","-plugin-path","/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","plinth_apple"]
+
+  "C.PlinthApplePackageTests-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.derived/runner.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthAppleTests.swiftmodule","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/sources"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApplePackageTests.swiftmodule"]
+    description: "Compiling Swift Module 'PlinthApplePackageTests' (1 sources)"
+    args: ["/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","PlinthApplePackageTests","-emit-dependencies","-emit-module","-emit-module-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApplePackageTests.swiftmodule","-output-file-map","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/output-file-map.json","-parse-as-library","-incremental","@/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/sources","-I","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx13.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-Onone","-enable-testing","-Xfrontend","-enable-cross-import-overlays","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-Xcc","-fmodule-map-file=/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthCoreFFI/module.modulemap","-module-cache-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthApplePackageTests.build/include/PlinthApplePackageTests-Swift.h","-Xfrontend","-experimental-lazy-typecheck","-Xfrontend","-experimental-skip-all-function-bodies","-Xfrontend","-experimental-allow-module-with-compiler-errors","-Xfrontend","-empty-abi-descriptor","-plugin-path","/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","plinth_apple"]
+
+  "C.PlinthAppleTests-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Tests/PlinthAppleTests/PlinthSessionTests.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/swift-version--3CB7CFEC50E0D141.txt","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthApple.swiftmodule","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/sources"]
+    outputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthAppleTests.swiftmodule"]
+    description: "Compiling Swift Module 'PlinthAppleTests' (1 sources)"
+    args: ["/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","PlinthAppleTests","-emit-dependencies","-emit-module","-emit-module-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules/PlinthAppleTests.swiftmodule","-output-file-map","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/output-file-map.json","-parse-as-library","-incremental","@/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/PlinthAppleTests.build/sources","-I","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-Onone","-enable-testing","-Xfrontend","-enable-cross-import-overlays","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-Xcc","-fmodule-map-file=/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthCoreFFI/module.modulemap","-module-cache-path","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/.build/index-build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-swift-version","5","-Xfrontend","-experimental-lazy-typecheck","-Xfrontend","-experimental-skip-all-function-bodies","-Xfrontend","-experimental-allow-module-with-compiler-errors","-Xfrontend","-empty-abi-descriptor","-plugin-path","/Applications/Xcode-26.3.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode-26.3.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","plinth_apple"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthApple/","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Sources/PlinthCoreFFI/","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Tests/PlinthAppleTests/","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Package.swift","/Users/steven/Developer/plinth-video/packages/apple/plinth-apple/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

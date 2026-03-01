@@ -5,13 +5,13 @@ let package = Package(
     name: "MacosDemo",
     platforms: [.macOS(.v13)],
     dependencies: [
-        .package(path: "../../packages/apple/plinth-swift"),
+        .package(path: "../../packages/apple/plinth-avplayer"),
     ],
     targets: [
         .executableTarget(
             name: "MacosDemo",
             dependencies: [
-                .product(name: "PlinthAVPlayer", package: "plinth-swift"),
+                .product(name: "PlinthAVPlayer", package: "plinth-avplayer"),
             ],
             path: "Sources/MacosDemo",
             linkerSettings: [

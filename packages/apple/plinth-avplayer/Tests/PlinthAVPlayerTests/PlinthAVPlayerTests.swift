@@ -1,6 +1,6 @@
 import XCTest
 import AVFoundation
-import PlinthSwift
+import PlinthApple
 @testable import PlinthAVPlayer
 
 /// Tests drive `PlinthAVPlayer` via the internal `handle*` event methods,

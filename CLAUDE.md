@@ -17,7 +17,7 @@ Three-layer architecture designed to minimize per-platform maintenance:
 ```
 plinth-core (Rust)
   ├── → wasm target  → plinth-js (TypeScript)  → plinth-hlsjs (Hls.js integration)
-  └── → native .a    → plinth-swift (Swift)    → plinth-avplayer (AVPlayer integration)
+  └── → native .a    → plinth-apple (Swift)    → plinth-avplayer (AVPlayer integration)
 ```
 
 ### Layer 1: `plinth-core` (Rust)
@@ -26,7 +26,7 @@ plinth-core (Rust)
 - **Does NOT perform HTTP** — returns serialized beacon batches for the platform layer to transmit
 - Heartbeat timer is platform-driven: platform calls `tick(now_ms)` periodically; core checks if the interval has elapsed
 
-### Layer 2: Platform frameworks (`plinth-js`, `plinth-swift`, etc.)
+### Layer 2: Platform frameworks (`plinth-js`, `plinth-apple`, etc.)
 - Written in the platform's native language (TypeScript, Swift, Kotlin)
 - Owns all platform I/O: HTTP fetch, timers, timestamps, user agent string
 - Loads and wraps the core (Wasm or native FFI)
@@ -49,7 +49,8 @@ plinth-video/
 │   │   ├── plinth-hlsjs/          # Layer 3: Hls.js integration
 │   │   └── plinth-shaka/          # Layer 3: Shaka Player integration
 │   ├── apple/
-│   │   └── plinth-swift/          # Layer 2+3: Swift package (PlinthSwift + PlinthAVPlayer)
+│   │   ├── plinth-apple/          # Layer 2: Swift package (PlinthApple + PlinthCoreFFI)
+│   │   └── plinth-avplayer/       # Layer 3: AVPlayer integration (depends on plinth-apple)
 │   └── android/
 │       ├── plinth-android/        # Layer 2: Kotlin/JNI wrapper
 │       └── plinth-media3/         # Layer 3: Media3/ExoPlayer integration
@@ -106,7 +107,8 @@ Critical seek guard: `pre_seek_state` must be tracked. `seekEnd` resolves to `Pl
 | `plinth-js` | `packages/web/plinth-js/` | TypeScript | `bun` |
 | `plinth-hlsjs` | `packages/web/plinth-hlsjs/` | TypeScript | `bun` |
 | `plinth-shaka` | `packages/web/plinth-shaka/` | TypeScript | `bun` |
-| `plinth-swift` + `plinth-avplayer` | `packages/apple/plinth-swift/` | Swift | Xcode / Swift Package Manager |
+| `plinth-apple` | `packages/apple/plinth-apple/` | Swift | Xcode / Swift Package Manager |
+| `plinth-avplayer` | `packages/apple/plinth-avplayer/` | Swift | Xcode / Swift Package Manager |
 | `plinth-android` | `packages/android/plinth-android/` | Kotlin | Gradle |
 | `plinth-media3` | `packages/android/plinth-media3/` | Kotlin | Gradle |
 | Web demo | `samples/web/` | TypeScript | `bun` |
@@ -131,7 +133,7 @@ bun test --cwd packages/web/plinth-js      # run one package
 bun run samples/web/server.ts              # serves at http://localhost:3000
                                            # Shaka demo at http://localhost:3000/shaka
 
-# Swift (from packages/apple/plinth-swift/)
+# Swift (from packages/apple/plinth-apple/)
 swift test
 
 # Android

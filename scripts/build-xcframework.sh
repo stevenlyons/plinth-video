@@ -24,7 +24,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRATE="$REPO_ROOT/crates/plinth-core"
-HEADER="$REPO_ROOT/packages/plinth-swift/Sources/PlinthCoreFFI/plinth_core.h"
+HEADER="$REPO_ROOT/packages/apple/plinth-apple/Sources/PlinthCoreFFI/plinth_core.h"
 OUT="$REPO_ROOT/PlinthCoreFFI.xcframework"
 
 PROFILE="debug"

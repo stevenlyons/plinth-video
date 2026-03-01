@@ -1,5 +1,5 @@
 import XCTest
-@testable import PlinthSwift
+@testable import PlinthApple
 
 final class PlinthSessionTests: XCTestCase {
 
@@ -12,7 +12,7 @@ final class PlinthSessionTests: XCTestCase {
             sdk: SdkMetadata(
                 apiVersion: 1,
                 core: SdkComponent(name: "plinth-core", version: "0.1.0"),
-                framework: SdkComponent(name: "plinth-swift", version: "0.1.0"),
+                framework: SdkComponent(name: "plinth-apple", version: "0.1.0"),
                 player: SdkComponent(name: "plinth-avplayer", version: "0.1.0")
             )
         )

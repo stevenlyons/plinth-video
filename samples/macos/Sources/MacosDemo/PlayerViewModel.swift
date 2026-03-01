@@ -1,5 +1,5 @@
 import AVFoundation
-import PlinthSwift
+import PlinthApple
 import PlinthAVPlayer
 
 struct LogEntry: Identifiable {

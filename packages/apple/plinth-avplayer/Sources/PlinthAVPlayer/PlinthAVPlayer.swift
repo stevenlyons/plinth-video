@@ -1,5 +1,5 @@
 import AVFoundation
-import PlinthSwift
+import PlinthApple
 
 // MARK: - Public types
 
@@ -105,7 +105,7 @@ public final class PlinthAVPlayer {
             sdk: SdkMetadata(
                 apiVersion: 1,
                 core: SdkComponent(name: "plinth-core", version: "0.1.0"),
-                framework: SdkComponent(name: "plinth-swift", version: "0.1.0"),
+                framework: SdkComponent(name: "plinth-apple", version: "0.1.0"),
                 player: SdkComponent(name: "plinth-avplayer", version: "0.1.0")
             )
         )
