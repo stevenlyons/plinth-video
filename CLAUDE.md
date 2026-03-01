@@ -37,14 +37,50 @@ plinth-core (Rust)
 - Implements the public SDK API: `initialize(player, component, metadata)`, `updateMetadata(metadata)`, `destroy()`
 - Hides layers 1 and 2 from the application developer
 
+## Repository Layout
+
+```
+plinth-video/
+├── crates/                        # Rust
+│   └── plinth-core/               # Layer 1: state machine, metrics, beacon, FFI
+├── packages/
+│   ├── web/                       # JS/TypeScript packages (bun workspace)
+│   │   ├── plinth-js/             # Layer 2: Wasm wrapper, heartbeat, HTTP poster
+│   │   ├── plinth-hlsjs/          # Layer 3: Hls.js integration
+│   │   └── plinth-shaka/          # Layer 3: Shaka Player integration
+│   ├── apple/
+│   │   └── plinth-swift/          # Layer 2+3: Swift package (PlinthSwift + PlinthAVPlayer)
+│   └── android/
+│       ├── plinth-android/        # Layer 2: Kotlin/JNI wrapper
+│       └── plinth-media3/         # Layer 3: Media3/ExoPlayer integration
+├── samples/
+│   ├── web/                       # Bun dev server + HLS.js and Shaka smoke-test pages
+│   ├── macos/                     # macOS SwiftUI demo app
+│   └── android/                   # Android sample app
+├── docs/
+│   ├── overview-prd.md        # Top-level product requirements and personas
+│   ├── prd/                       # Per-feature Product Requirements Documents
+│   ├── tdd/                       # Per-feature Technical Design Documents
+│   └── reference/                 # Specs, schemas, quickstarts, API docs
+│       ├── beacon-payload.schema.json
+│       ├── beacon-payload.samples.json
+│       ├── beacon-payload.md
+│       ├── player-state-machine.mermaid
+│       ├── sdk-api.md
+│       ├── quickstart-hlsjs.md
+│       ├── quickstart-avplayer.md
+│       └── new-player-integration.md
+└── scripts/                       # build-xcframework.sh, setup-android.sh
+```
+
 ## Key Specs & Docs
 
 All specs are authoritative — implement against them:
 
-- `docs/prd.md` — requirements, personas, goals
-- `docs/player-state-machine.mermaid` — 11-state machine with guards (read before touching state logic)
-- `docs/beacon-payload.schema.json` — JSON Schema for beacon payloads (source of truth for types)
-- `docs/beacon-payload.samples.json` — concrete examples of a full play session lifecycle
+- `docs/overview-prd.md` — requirements, personas, goals
+- `docs/reference/player-state-machine.mermaid` — 11-state machine with guards (read before touching state logic)
+- `docs/reference/beacon-payload.schema.json` — JSON Schema for beacon payloads (source of truth for types)
+- `docs/reference/beacon-payload.samples.json` — concrete examples of a full play session lifecycle
 - `TASKS.md` — phased task list (update as work progresses)
 
 ## Player State Machine
@@ -64,16 +100,18 @@ Critical seek guard: `pre_seek_state` must be tracked. `seekEnd` resolves to `Pl
 
 ## Language & Toolchain per Component
 
-| Component | Language | Toolchain |
-|---|---|---|
-| `plinth-core` | Rust | `cargo`, `wasm-pack` for Wasm target |
-| `plinth-js` | TypeScript | `bun` |
-| `plinth-hlsjs` | TypeScript | `bun` |
-| `plinth-swift` | Swift | Xcode / Swift Package Manager |
-| `plinth-avplayer` | Swift | Xcode / Swift Package Manager |
-| Dev server | TypeScript | `bun` |
+| Component | Location | Language | Toolchain |
+|---|---|---|---|
+| `plinth-core` | `crates/plinth-core/` | Rust | `cargo`, `wasm-pack` for Wasm target |
+| `plinth-js` | `packages/web/plinth-js/` | TypeScript | `bun` |
+| `plinth-hlsjs` | `packages/web/plinth-hlsjs/` | TypeScript | `bun` |
+| `plinth-shaka` | `packages/web/plinth-shaka/` | TypeScript | `bun` |
+| `plinth-swift` + `plinth-avplayer` | `packages/apple/plinth-swift/` | Swift | Xcode / Swift Package Manager |
+| `plinth-android` | `packages/android/plinth-android/` | Kotlin | Gradle |
+| `plinth-media3` | `packages/android/plinth-media3/` | Kotlin | Gradle |
+| Web demo | `samples/web/` | TypeScript | `bun` |
 
-## Build Commands (once implemented)
+## Build Commands
 
 ```bash
 # Rust core — native
@@ -82,10 +120,21 @@ cargo test -p plinth-core
 cargo test -p plinth-core -- <test_name>   # run single test
 
 # Rust core — Wasm
-wasm-pack build crates/plinth-core --target web
+wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js/wasm
 
 # JS packages (from repo root or package dir)
 bun install
-bun test
-bun run build
+bun test                                   # run all web tests
+bun test --cwd packages/web/plinth-js      # run one package
+
+# Web demo server
+bun run samples/web/server.ts              # serves at http://localhost:3000
+                                           # Shaka demo at http://localhost:3000/shaka
+
+# Swift (from packages/apple/plinth-swift/)
+swift test
+
+# Android
+./gradlew :plinth-android:test
+./gradlew :plinth-media3:test
 ```

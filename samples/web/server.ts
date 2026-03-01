@@ -39,7 +39,7 @@ console.log("[build] shaka done —", shakaBuildResult.outputs.map((o) => o.path
 
 // Copy wasm binary alongside the bundle (Bun bundler keeps the new URL() pattern
 // but doesn't auto-copy the .wasm file into outdir)
-const wasmSrc = join(import.meta.dir, "../packages/plinth-js/wasm/plinth_core_bg.wasm");
+const wasmSrc = join(import.meta.dir, "../../packages/web/plinth-js/wasm/plinth_core_bg.wasm");
 const wasmDest = join(distDir, "plinth_core_bg.wasm");
 await Bun.write(wasmDest, Bun.file(wasmSrc));
 console.log("[build] Copied plinth_core_bg.wasm →", wasmDest);

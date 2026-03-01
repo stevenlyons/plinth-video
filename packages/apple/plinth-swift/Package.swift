@@ -26,7 +26,7 @@ let package = Package(
                 // For local development: link against the Rust debug build.
                 // For device/distribution: replace this with the XCFramework binary target.
                 .linkedLibrary("plinth_core"),
-                .unsafeFlags(["-L../../target/debug"]),
+                .unsafeFlags(["-L../../../target/debug"]),
             ]
         ),
 
@@ -36,7 +36,7 @@ let package = Package(
             dependencies: ["PlinthSwift"],
             linkerSettings: [
                 .linkedLibrary("plinth_core"),
-                .unsafeFlags(["-L../../target/debug"]),
+                .unsafeFlags(["-L../../../target/debug"]),
             ]
         ),
 
@@ -52,7 +52,7 @@ let package = Package(
             dependencies: ["PlinthAVPlayer"],
             linkerSettings: [
                 .linkedLibrary("plinth_core"),
-                .unsafeFlags(["-L../../target/debug"]),
+                .unsafeFlags(["-L../../../target/debug"]),
             ]
         ),
     ]

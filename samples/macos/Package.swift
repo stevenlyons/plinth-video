@@ -5,7 +5,7 @@ let package = Package(
     name: "MacosDemo",
     platforms: [.macOS(.v13)],
     dependencies: [
-        .package(path: "../../packages/plinth-swift"),
+        .package(path: "../../packages/apple/plinth-swift"),
     ],
     targets: [
         .executableTarget(

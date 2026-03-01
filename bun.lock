@@ -5,20 +5,7 @@
     "": {
       "name": "plinth-video",
     },
-    "dev": {
-      "name": "@plinth/dev",
-      "version": "0.1.0",
-      "dependencies": {
-        "@plinth/hlsjs": "workspace:*",
-        "@plinth/js": "workspace:*",
-        "@plinth/shaka": "workspace:*",
-        "hls.js": "^1.0.0",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-      },
-    },
-    "packages/plinth-hlsjs": {
+    "packages/web/plinth-hlsjs": {
       "name": "@plinth/hlsjs",
       "version": "0.1.0",
       "dependencies": {
@@ -33,7 +20,7 @@
         "hls.js": "^1.0.0",
       },
     },
-    "packages/plinth-js": {
+    "packages/web/plinth-js": {
       "name": "@plinth/js",
       "version": "0.1.0",
       "devDependencies": {
@@ -41,7 +28,7 @@
         "typescript": "^5.0.0",
       },
     },
-    "packages/plinth-shaka": {
+    "packages/web/plinth-shaka": {
       "name": "@plinth/shaka",
       "version": "0.1.0",
       "dependencies": {
@@ -56,15 +43,28 @@
         "shaka-player": "^4.0.0",
       },
     },
+    "samples/web": {
+      "name": "@plinth/dev",
+      "version": "0.1.0",
+      "dependencies": {
+        "@plinth/hlsjs": "workspace:*",
+        "@plinth/js": "workspace:*",
+        "@plinth/shaka": "workspace:*",
+        "hls.js": "^1.0.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
   },
   "packages": {
-    "@plinth/dev": ["@plinth/dev@workspace:dev"],
+    "@plinth/dev": ["@plinth/dev@workspace:samples/web"],
 
-    "@plinth/hlsjs": ["@plinth/hlsjs@workspace:packages/plinth-hlsjs"],
+    "@plinth/hlsjs": ["@plinth/hlsjs@workspace:packages/web/plinth-hlsjs"],
 
-    "@plinth/js": ["@plinth/js@workspace:packages/plinth-js"],
+    "@plinth/js": ["@plinth/js@workspace:packages/web/plinth-js"],
 
-    "@plinth/shaka": ["@plinth/shaka@workspace:packages/plinth-shaka"],
+    "@plinth/shaka": ["@plinth/shaka@workspace:packages/web/plinth-shaka"],
 
     "@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
 
