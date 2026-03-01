@@ -6,7 +6,7 @@ Integrate plinth-video into a Hls.js player in three steps.
 
 - Bun workspace (or any bundler with ESM support)
 - `hls.js` ≥ 1.0
-- The dev server (`dev/`) running on `http://localhost:3000` to receive beacons
+- The dev server (`samples/web/`) running on `http://localhost:3000` to receive beacons
 
 ## 1. Install
 

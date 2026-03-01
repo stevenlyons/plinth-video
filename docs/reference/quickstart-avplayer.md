@@ -6,11 +6,11 @@ Integrate plinth-video into an AVPlayer app in three steps.
 
 - iOS 16+ or macOS 13+
 - Xcode 15+ / Swift 5.9+
-- The dev server (`dev/`) running on `http://localhost:3000` to receive beacons
+- The dev server (`samples/web/`) running on `http://localhost:3000` to receive beacons
 
 ## 1. Install
 
-Add the package via Swift Package Manager. In Xcode: **File → Add Package Dependencies**, enter the repo URL, and add both `PlinthSwift` and `PlinthAVPlayer` to your target.
+Add the package via Swift Package Manager. In Xcode: **File → Add Package Dependencies**, enter the repo URL, and add `PlinthAVPlayer` to your target (it pulls in `PlinthApple` automatically as a dependency).
 
 Or in `Package.swift`:
 
