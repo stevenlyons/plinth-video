@@ -1,0 +1,20 @@
+{
+  "name": "@plinth/shaka",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@plinth/js": "workspace:*"
+  },
+  "peerDependencies": {
+    "shaka-player": "^4.0.0"
+  },
+  "devDependencies": {
+    "shaka-player": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/bun": "latest"
+  }
+}

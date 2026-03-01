@@ -9,6 +9,7 @@
   "dependencies": {
     "@plinth/hlsjs": "workspace:*",
     "@plinth/js": "workspace:*",
+    "@plinth/shaka": "workspace:*",
     "hls.js": "^1.0.0"
   },
   "devDependencies": {
