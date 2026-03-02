@@ -10,7 +10,9 @@
     "@plinth/hlsjs": "workspace:*",
     "@plinth/js": "workspace:*",
     "@plinth/shaka": "workspace:*",
-    "hls.js": "^1.0.0"
+    "@plinth/dashjs": "workspace:*",
+    "hls.js": "^1.0.0",
+    "dashjs": "^5.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest"

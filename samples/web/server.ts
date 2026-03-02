@@ -2,8 +2,8 @@ import { join } from "path";
 
 const distDir = join(import.meta.dir, "dist");
 
-// Build both client bundles on startup
-const [hlsBuildResult, shakaBuildResult] = await Promise.all([
+// Build all client bundles on startup
+const [hlsBuildResult, shakaBuildResult, dashjsBuildResult] = await Promise.all([
   Bun.build({
     entrypoints: [join(import.meta.dir, "main.ts")],
     outdir: distDir,
@@ -13,6 +13,12 @@ const [hlsBuildResult, shakaBuildResult] = await Promise.all([
   }),
   Bun.build({
     entrypoints: [join(import.meta.dir, "shaka-main.ts")],
+    outdir: distDir,
+    target: "browser",
+    minify: true,
+  }),
+  Bun.build({
+    entrypoints: [join(import.meta.dir, "dashjs-main.ts")],
     outdir: distDir,
     target: "browser",
     minify: true,
@@ -36,6 +42,15 @@ if (!shakaBuildResult.success) {
   process.exit(1);
 }
 console.log("[build] shaka done —", shakaBuildResult.outputs.map((o) => o.path).join(", "));
+
+if (!dashjsBuildResult.success) {
+  console.error("[build] dashjs failed:");
+  for (const msg of dashjsBuildResult.logs) {
+    console.error(" ", msg);
+  }
+  process.exit(1);
+}
+console.log("[build] dashjs done —", dashjsBuildResult.outputs.map((o) => o.path).join(", "));
 
 // Copy wasm binary alongside the bundle (Bun bundler keeps the new URL() pattern
 // but doesn't auto-copy the .wasm file into outdir)
@@ -86,6 +101,14 @@ Bun.serve({
     // Serve shaka.html for /shaka
     if (req.method === "GET" && url.pathname === "/shaka") {
       const file = Bun.file(join(import.meta.dir, "shaka.html"));
+      return new Response(file, {
+        headers: { "Content-Type": "text/html", ...CORS_HEADERS },
+      });
+    }
+
+    // Serve dashjs.html for /dashjs
+    if (req.method === "GET" && url.pathname === "/dashjs") {
+      const file = Bun.file(join(import.meta.dir, "dashjs.html"));
       return new Response(file, {
         headers: { "Content-Type": "text/html", ...CORS_HEADERS },
       });

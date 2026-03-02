@@ -1,0 +1,234 @@
+import { PlinthSession } from "@plinth/js";
+import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
+
+export interface VideoMeta {
+  id: string;
+  title?: string;
+}
+
+export type { PlinthConfig, SessionMeta };
+
+type SessionFactory = (meta: SessionMeta, config?: PlinthConfig) => Promise<PlinthSession>;
+
+// dash.js v5 event string constants
+const DashjsEvents = {
+  MANIFEST_LOADING_STARTED: "manifestLoadingStarted",
+  STREAM_INITIALIZED: "streamInitialized",
+  PLAYBACK_STALLED: "playbackStalled",
+  BUFFER_LOADED: "bufferLoaded",
+  PLAYBACK_STARTED: "playbackStarted",
+  QUALITY_CHANGE_RENDERED: "qualityChangeRendered",
+  ERROR: "error",
+} as const;
+
+// Minimal structural interface — avoids importing dashjs in library code
+interface DashjsRepresentation {
+  bandwidth: number;
+  width?: number | null;
+  height?: number | null;
+  frameRate?: number | string | null;
+  codecs?: string | null;
+}
+
+interface DashjsPlayer {
+  on(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
+  off(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
+  getSource(): string | null;
+  getCurrentRepresentationForType(type: "video"): DashjsRepresentation | null;
+}
+
+function isBufferReady(video: HTMLVideoElement): boolean {
+  const buffered = video.buffered;
+  const ct = video.currentTime;
+  for (let i = 0; i < buffered.length; i++) {
+    if (buffered.start(i) <= ct && ct <= buffered.end(i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// MPEG-DASH frameRate can be a fraction string like "30000/1001"
+function parseFrameRate(fr: number | string | null | undefined): number | undefined {
+  if (fr == null) return undefined;
+  if (typeof fr === "number") return fr;
+  const parts = fr.split("/");
+  if (parts.length === 2) return Number(parts[0]) / Number(parts[1]);
+  return parseFloat(fr) || undefined;
+}
+
+export class PlinthDashjs {
+  private session: PlinthSession;
+  private player: DashjsPlayer;
+  private video: HTMLVideoElement;
+  private lastPlayheadMs = 0;
+  private hasFiredFirstFrame = false;
+  private destroyed = false;
+  private playerHandlers = new Map<string, (e?: unknown) => void>();
+  private videoHandlers = new Map<string, EventListener>();
+
+  private constructor(session: PlinthSession, player: DashjsPlayer, video: HTMLVideoElement) {
+    this.session = session;
+    this.player = player;
+    this.video = video;
+  }
+
+  static async initialize(
+    player: DashjsPlayer,
+    video: HTMLVideoElement,
+    videoMeta: VideoMeta,
+    options?: { config?: PlinthConfig; sessionFactory?: SessionFactory },
+  ): Promise<PlinthDashjs> {
+    const factory = options?.sessionFactory ?? PlinthSession.create.bind(PlinthSession);
+    const userAgent =
+      typeof globalThis.navigator !== "undefined" ? globalThis.navigator.userAgent : "unknown";
+    const meta: SessionMeta = {
+      video: { id: videoMeta.id, title: videoMeta.title },
+      client: { user_agent: userAgent },
+      sdk: {
+        api_version: 1,
+        core:      { name: "plinth-core",   version: "0.1.0" },
+        framework: { name: "plinth-js",     version: "0.1.0" },
+        player:    { name: "plinth-dashjs", version: "0.1.0" },
+      },
+    };
+    const session = await factory(meta, options?.config);
+    const instance = new PlinthDashjs(session, player, video);
+    instance.attachPlayerListeners();
+    instance.attachVideoListeners();
+    return instance;
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+
+    for (const [event, handler] of this.playerHandlers) {
+      this.player.off(event, handler);
+    }
+    this.playerHandlers.clear();
+
+    for (const [event, handler] of this.videoHandlers) {
+      this.video.removeEventListener(event, handler);
+    }
+    this.videoHandlers.clear();
+
+    this.session.destroy();
+  }
+
+  private emit(event: PlayerEvent): void {
+    this.session.processEvent(event);
+  }
+
+  private attachPlayerListeners(): void {
+    const onManifestLoadingStarted = () => {
+      this.hasFiredFirstFrame = false;
+      this.emit({ type: "load", src: this.player.getSource() ?? "" });
+    };
+    this.player.on(DashjsEvents.MANIFEST_LOADING_STARTED, onManifestLoadingStarted);
+    this.playerHandlers.set(DashjsEvents.MANIFEST_LOADING_STARTED, onManifestLoadingStarted);
+
+    const onStreamInitialized = () => {
+      this.emit({ type: "can_play" });
+    };
+    this.player.on(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
+    this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
+
+    const onPlaybackStalled = () => {
+      this.emit({ type: "waiting" });
+    };
+    this.player.on(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
+    this.playerHandlers.set(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
+
+    const onBufferLoaded = () => {
+      this.emit({ type: "can_play_through" });
+    };
+    this.player.on(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
+    this.playerHandlers.set(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
+
+    const onPlaybackStarted = () => {
+      if (!this.hasFiredFirstFrame) {
+        this.hasFiredFirstFrame = true;
+        this.emit({ type: "first_frame" });
+      }
+    };
+    this.player.on(DashjsEvents.PLAYBACK_STARTED, onPlaybackStarted);
+    this.playerHandlers.set(DashjsEvents.PLAYBACK_STARTED, onPlaybackStarted);
+
+    const onQualityChangeRendered = () => {
+      const rep = this.player.getCurrentRepresentationForType("video");
+      if (!rep) return;
+      this.emit({
+        type: "quality_change",
+        quality: {
+          bitrate_bps: rep.bandwidth,
+          width: rep.width ?? undefined,
+          height: rep.height ?? undefined,
+          framerate: parseFrameRate(rep.frameRate),
+          codec: rep.codecs ?? undefined,
+        },
+      });
+    };
+    this.player.on(DashjsEvents.QUALITY_CHANGE_RENDERED, onQualityChangeRendered);
+    this.playerHandlers.set(DashjsEvents.QUALITY_CHANGE_RENDERED, onQualityChangeRendered);
+
+    const onError = (e?: unknown) => {
+      const detail = e as { code?: unknown; message?: string } | undefined;
+      if (!detail) return;
+      this.emit({
+        type: "error",
+        code: String(detail.code ?? "UNKNOWN"),
+        message: detail.message,
+        fatal: true,
+      });
+    };
+    this.player.on(DashjsEvents.ERROR, onError);
+    this.playerHandlers.set(DashjsEvents.ERROR, onError);
+  }
+
+  private attachVideoListeners(): void {
+    const onPlay: EventListener = () => this.emit({ type: "play" });
+    this.video.addEventListener("play", onPlay);
+    this.videoHandlers.set("play", onPlay);
+
+    const onPause: EventListener = () => this.emit({ type: "pause" });
+    this.video.addEventListener("pause", onPause);
+    this.videoHandlers.set("pause", onPause);
+
+    const onSeeking: EventListener = () => {
+      this.emit({ type: "seek_start", from_ms: this.lastPlayheadMs });
+    };
+    this.video.addEventListener("seeking", onSeeking);
+    this.videoHandlers.set("seeking", onSeeking);
+
+    const onSeeked: EventListener = () => {
+      this.emit({
+        type: "seek_end",
+        to_ms: this.video.currentTime * 1000,
+        buffer_ready: isBufferReady(this.video),
+      });
+    };
+    this.video.addEventListener("seeked", onSeeked);
+    this.videoHandlers.set("seeked", onSeeked);
+
+    const onEnded: EventListener = () => this.emit({ type: "ended" });
+    this.video.addEventListener("ended", onEnded);
+    this.videoHandlers.set("ended", onEnded);
+
+    const onTimeUpdate: EventListener = () => {
+      const ms = this.video.currentTime * 1000;
+      this.lastPlayheadMs = ms;
+      this.session.setPlayhead(ms);
+    };
+    this.video.addEventListener("timeupdate", onTimeUpdate);
+    this.videoHandlers.set("timeupdate", onTimeUpdate);
+
+    const onVideoError: EventListener = () => {
+      const err = this.video.error;
+      if (!err) return;
+      this.emit({ type: "error", code: `MEDIA_ERR_${err.code}`, fatal: true });
+    };
+    this.video.addEventListener("error", onVideoError);
+    this.videoHandlers.set("error", onVideoError);
+  }
+}
