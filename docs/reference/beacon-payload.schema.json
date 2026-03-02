@@ -63,6 +63,11 @@
         "metrics": {
           "$ref": "#/$defs/Metrics",
           "description": "Accumulated QoE metrics at beacon time. Included on all beacons except session_open. Each beacon carries the full cumulative snapshot, so any single beacon can reconstruct session health without prior context."
+        },
+        "playhead_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current playhead position in the content timeline in milliseconds. Required on heartbeat. Also present on pause and session_end beacons, capturing the last known position at each session boundary."
         }
       },
       "allOf": [
@@ -100,6 +105,21 @@
                 "type": "integer",
                 "minimum": 0,
                 "description": "Current playhead position in the content timeline in milliseconds. Used to detect stalls and validate metrics on the server."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "event": { "enum": ["pause", "session_end"] } },
+            "required": ["event"]
+          },
+          "then": {
+            "properties": {
+              "playhead_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Last known playhead position in milliseconds at the time the beacon was emitted."
               }
             }
           }

@@ -280,8 +280,9 @@ impl Session {
                 self.played_tracker.stop(now_ms);
                 self.state = PlayerState::Paused;
                 let m = self.snapshot_metrics(now_ms);
-                let b =
+                let mut b =
                     self.make_beacon(BeaconEvent::Pause, Some(PlayerState::Paused), Some(m), now_ms);
+                b.playhead_ms = Some(self.playhead_ms);
                 out.push(b);
             }
 
@@ -321,12 +322,13 @@ impl Session {
                 self.watch_tracker.stop(now_ms);
                 self.state = PlayerState::Ended;
                 let m = self.snapshot_metrics(now_ms);
-                let b = self.make_beacon(
+                let mut b = self.make_beacon(
                     BeaconEvent::SessionEnd,
                     Some(PlayerState::Ended),
                     Some(m),
                     now_ms,
                 );
+                b.playhead_ms = Some(self.playhead_ms);
                 out.push(b);
             }
 
@@ -374,12 +376,13 @@ impl Session {
                 self.watch_tracker.stop(now_ms);
                 self.state = PlayerState::Idle;
                 let m = self.snapshot_metrics(now_ms);
-                let b = self.make_beacon(
+                let mut b = self.make_beacon(
                     BeaconEvent::SessionEnd,
                     Some(PlayerState::Ended),
                     Some(m),
                     now_ms,
                 );
+                b.playhead_ms = Some(self.playhead_ms);
                 out.push(b);
                 self.last_heartbeat_ms = None;
             }
@@ -469,12 +472,13 @@ impl Session {
                     now_ms,
                 );
                 out.push(b1);
-                let b2 = self.make_beacon(
+                let mut b2 = self.make_beacon(
                     BeaconEvent::Pause,
                     Some(PlayerState::Paused),
                     Some(m),
                     now_ms,
                 );
+                b2.playhead_ms = Some(self.playhead_ms);
                 out.push(b2);
             }
 
@@ -590,12 +594,13 @@ impl Session {
             self.rebuffer_tracker.stop(now_ms);
             self.watch_tracker.stop(now_ms);
             let m = self.snapshot_metrics(now_ms);
-            let b = self.make_beacon(
+            let mut b = self.make_beacon(
                 BeaconEvent::SessionEnd,
                 Some(PlayerState::Ended),
                 Some(m),
                 now_ms,
             );
+            b.playhead_ms = Some(self.playhead_ms);
             out.push(b);
         }
 
@@ -1496,5 +1501,89 @@ mod tests {
         assert!(json.contains("plinth-hlsjs"));
         assert!(json.contains("TestAgent/1.0"));
         assert!(json.contains("vid-001"));
+    }
+
+    // ── Playback position tracking ────────────────────────────────────────────
+
+    #[test]
+    fn pause_beacon_includes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(5_000);
+        let beacons = s.process_event(PlayerEvent::Pause, 5_000);
+        assert_eq!(beacons[0].event, BeaconEvent::Pause);
+        assert_eq!(beacons[0].playhead_ms, Some(5_000));
+    }
+
+    #[test]
+    fn rebuffering_pause_beacon_includes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Waiting, 5_000);
+        s.set_playhead(8_000);
+        let beacons = s.process_event(PlayerEvent::Pause, 8_000);
+        // beacons[0] = rebuffer_end, beacons[1] = pause
+        assert_eq!(beacons[1].event, BeaconEvent::Pause);
+        assert_eq!(beacons[1].playhead_ms, Some(8_000));
+    }
+
+    #[test]
+    fn natural_end_session_end_includes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(120_000);
+        let beacons = s.process_event(PlayerEvent::Ended, 120_000);
+        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].playhead_ms, Some(120_000));
+    }
+
+    #[test]
+    fn paused_destroy_session_end_includes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 5_000);
+        s.set_playhead(30_000);
+        let beacons = s.process_event(PlayerEvent::Destroy, 30_000);
+        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].playhead_ms, Some(30_000));
+    }
+
+    #[test]
+    fn force_destroy_session_end_includes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(15_000);
+        let beacons = s.destroy(15_000);
+        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].playhead_ms, Some(15_000));
+    }
+
+    #[test]
+    fn playhead_ms_defaults_to_zero_when_not_set() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        // No set_playhead call — playhead_ms should be Some(0)
+        let beacons = s.process_event(PlayerEvent::Pause, 5_000);
+        assert_eq!(beacons[0].playhead_ms, Some(0));
+    }
+
+    #[test]
+    fn heartbeat_still_includes_playhead_ms_regression() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(7_000);
+        let beacons = s.tick(10_000);
+        assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
+        assert_eq!(beacons[0].playhead_ms, Some(7_000));
+    }
+
+    #[test]
+    fn pause_beacon_serializes_playhead_ms() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(45_000);
+        let beacons = s.process_event(PlayerEvent::Pause, 45_000);
+        let json = miniserde::json::to_string(&beacons[0]);
+        assert!(json.contains("\"playhead_ms\":45000"));
     }
 }
