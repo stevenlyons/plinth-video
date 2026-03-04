@@ -2,7 +2,10 @@
 
 ## Overview
 
-Technical design for adding `playhead_ms` to `pause` and `session_end` beacons so the server always knows the viewer's last known position at every natural session boundary — even if the final heartbeat was never received. No changes are required at Layer 2 (platform) or Layer 3 (player integration); all changes are in `plinth-core`.
+Technical design for two related capabilities:
+
+1. **Beacon enrichment** — Add `playhead_ms` to `pause` and `session_end` beacons so the server always knows the viewer's last known position at every natural session boundary, even if the final heartbeat was never received.
+2. **Client-side position query API** — Expose a `getPlayhead()` method on every platform's public integration object so developers can read the current playhead position at any time without parsing beacons.
 
 ---
 
@@ -10,18 +13,19 @@ Technical design for adding `playhead_ms` to `pause` and `session_end` beacons s
 
 - Server can restore a viewer's playback position after they exit by reading the most recent `pause` or `session_end` beacon.
 - Server can determine whether a video was "completed" by comparing `playhead_ms` in `session_end` against video duration.
+- Developers can call `getPlayhead()` locally to implement resume-from-position without running a separate beacon stack.
 - Clients do not need to run a separate position-tracking beacon alongside the QoE beacon.
 
 ---
 
 ## Architecture
 
-Only Layer 1 (`plinth-core`) and the JSON schema are modified. Layers 2 and 3 already call `session.set_playhead(ms)` continuously, so the position data is already present in the session state. No API changes are needed.
+The beacon enrichment touches only Layer 1. The client-side query API propagates through all three layers.
 
 ```
-plinth-core  ← changes here (session.rs + beacon-payload.schema.json)
-  └── plinth-js / plinth-apple / plinth-android  ← no changes
-        └── plinth-hlsjs / plinth-avplayer / plinth-media3  ← no changes
+plinth-core  ← beacon changes + get_playhead() + FFI/Wasm/JNI getter
+  └── plinth-js / plinth-apple / plinth-android  ← getPlayhead() on session
+        └── plinth-hlsjs / plinth-avplayer / plinth-media3  ← getPlayhead() on integration
 ```
 
 ---
@@ -217,4 +221,283 @@ The `playhead_ms` field on the `Session` struct already holds the latest value r
 | File | Change |
 |---|---|
 | `crates/plinth-core/src/session.rs` | Set `b.playhead_ms` on `pause` and `session_end` beacons (5 sites) |
+| `docs/reference/beacon-payload.schema.json` | Add `playhead_ms` to `Beacon.properties`; add `allOf` condition for `pause`/`session_end` |
+
+---
+
+## Client-Side Position Query API
+
+The PRD requires a local, callable API that developers can use to retrieve the current playhead position at any time — not just from beacons. This is a read-only getter that exposes the `playhead_ms` value already maintained by the core.
+
+### Architecture
+
+The getter propagates through all three layers on every platform. Unlike the beacon changes above, this touches Layers 1, 2, and 3.
+
+```
+plinth-core  ← Session::get_playhead() + FFI/Wasm getter
+  └── plinth-js / plinth-apple / plinth-android  ← getPlayhead() on session
+        └── plinth-hlsjs / plinth-avplayer / plinth-media3  ← getPlayhead() on integration
+```
+
+The value returned is the same `playhead_ms` that Layer 3 writes via `setPlayhead()` on every `timeupdate` / periodic observer. It is always the last value reported by the player, in milliseconds. It defaults to `0` if `setPlayhead` has never been called.
+
+---
+
+### Layer 1: `crates/plinth-core/src/session.rs`
+
+Add a public getter alongside the existing `set_playhead`:
+
+```rust
+/// Return the last playhead position reported by the platform, in milliseconds.
+pub fn get_playhead(&self) -> u64 {
+    self.playhead_ms
+}
+```
+
+### Layer 1: `crates/plinth-core/src/wasm.rs`
+
+Add to the `#[wasm_bindgen] impl WasmSession` block:
+
+```rust
+pub fn get_playhead(&self) -> f64 {
+    self.inner.get_playhead() as f64
+}
+```
+
+Returns `f64` consistent with the existing `set_playhead` signature (JS numbers are f64).
+
+### Layer 1: `crates/plinth-core/src/ffi.rs`
+
+Add a new C FFI function:
+
+```rust
+/// Return the last playhead position reported by the platform, in milliseconds.
+/// Returns 0 if ptr is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn plinth_session_get_playhead(ptr: *mut Session) -> u64 {
+    if ptr.is_null() {
+        return 0;
+    }
+    (*ptr).get_playhead()
+}
+```
+
+### Layer 1: `packages/apple/plinth-apple/Sources/PlinthCoreFFI/plinth_core.h`
+
+Add declaration alongside `plinth_session_set_playhead`:
+
+```c
+/**
+ * Return the last playhead position reported by the platform, in milliseconds.
+ * Returns 0 if session is NULL.
+ */
+uint64_t plinth_session_get_playhead(PlinthSession* session);
+```
+
+### Layer 1: `crates/plinth-core/src/jni.rs`
+
+Add JNI export alongside `sessionSetPlayhead`:
+
+```rust
+/// Return the last playhead position reported by the platform, in milliseconds.
+/// Returns 0 if ptr is 0.
+#[no_mangle]
+pub extern "system" fn Java_io_plinth_android_PlinthCoreJni_sessionGetPlayhead(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) -> jlong {
+    if ptr == 0 {
+        return 0;
+    }
+    let session = unsafe { &*(ptr as *mut Session) };
+    session.get_playhead() as jlong
+}
+```
+
+---
+
+### Layer 2: `packages/web/plinth-js/src/types.ts`
+
+Add `get_playhead` to `WasmSessionLike`:
+
+```ts
+export interface WasmSessionLike {
+  process_event(event_json: string, now_ms: number): string;
+  tick(now_ms: number): string;
+  destroy(now_ms: number): string;
+  set_playhead(playhead_ms: number): void;
+  get_playhead(): number;  // ← new
+  free(): void;
+}
+```
+
+### Layer 2: `packages/web/plinth-js/src/index.ts`
+
+Add `getPlayhead()` to `PlinthSession`:
+
+```ts
+/** Return the last playhead position reported by the player, in milliseconds. */
+getPlayhead(): number {
+  if (this.destroyed) return 0;
+  return this.wasmSession.get_playhead();
+}
+```
+
+### Layer 2: `packages/apple/plinth-apple/Sources/PlinthApple/PlinthSession.swift`
+
+Add alongside `setPlayhead`:
+
+```swift
+/// Return the last playhead position reported by the player, in milliseconds.
+public func getPlayhead() -> UInt64 {
+    guard !isDestroyed else { return 0 }
+    return plinth_session_get_playhead(ptr)
+}
+```
+
+### Layer 2: `packages/android/plinth-android/src/main/java/io/plinth/android/CoreJni.kt`
+
+Add to the `CoreJni` interface:
+
+```kotlin
+fun sessionGetPlayhead(ptr: Long): Long
+```
+
+### Layer 2: `packages/android/plinth-android/src/main/java/io/plinth/android/PlinthCoreJni.kt`
+
+The JNI binding is generated automatically from the `jni.rs` export — no manual implementation is needed beyond declaring the method in the interface.
+
+### Layer 2: `packages/android/plinth-android/src/main/java/io/plinth/android/PlinthSession.kt`
+
+Add alongside `setPlayhead`:
+
+```kotlin
+/**
+ * Return the last playhead position reported by the player, in milliseconds.
+ * Returns 0 if the session has been destroyed or setPlayhead was never called.
+ */
+fun getPlayhead(): Long {
+    if (isDestroyed) return 0L
+    // Synchronous read — dispatched to the session thread for consistency.
+    return runBlocking(sessionDispatcher) {
+        if (isDestroyed) 0L else jni.sessionGetPlayhead(ptr)
+    }
+}
+```
+
+> **Note:** `getPlayhead()` is synchronous from the caller's perspective. It marshals to the session dispatcher to read the value on the same thread as `setPlayhead` writes. `runBlocking` is acceptable here because `sessionGetPlayhead` is a simple memory read with no blocking I/O.
+
+---
+
+### Layer 3: `packages/web/plinth-hlsjs/src/index.ts`
+
+Add to `PlinthHlsJs`:
+
+```ts
+/** Return the last known playhead position in milliseconds. */
+getPlayhead(): number {
+  if (this.destroyed) return 0;
+  return this.session.getPlayhead();
+}
+```
+
+### Layer 3: `packages/web/plinth-shaka/src/index.ts`
+
+Same pattern as `plinth-hlsjs`.
+
+### Layer 3: `packages/apple/plinth-avplayer/Sources/PlinthAVPlayer/PlinthAVPlayer.swift`
+
+Add to `PlinthAVPlayer`:
+
+```swift
+/// Return the last known playhead position in milliseconds.
+public func getPlayhead() -> UInt64 {
+    return session?.getPlayhead() ?? 0
+}
+```
+
+### Layer 3: `packages/android/plinth-media3/src/main/java/io/plinth/media3/PlinthMedia3.kt`
+
+Add to `PlinthMedia3`:
+
+```kotlin
+/** Return the last known playhead position in milliseconds. */
+fun getPlayhead(): Long = session?.getPlayhead() ?: 0L
+```
+
+---
+
+## Test Coverage (Client-Side API)
+
+### `crates/plinth-core/src/session.rs`
+
+| # | Test | Assertion |
+|---|---|---|
+| 1 | `get_playhead_returns_zero_before_set` | Fresh session → `get_playhead() == 0` |
+| 2 | `get_playhead_returns_last_set_value` | `set_playhead(42_000)` → `get_playhead() == 42_000` |
+| 3 | `get_playhead_updates_on_repeated_sets` | Set 1000, then 5000 → `get_playhead() == 5000` |
+
+### `crates/plinth-core/src/ffi.rs`
+
+| # | Test | Assertion |
+|---|---|---|
+| 4 | `get_playhead_null_ptr_returns_zero` | `plinth_session_get_playhead(null) == 0` |
+| 5 | `get_playhead_returns_value_set_via_ffi` | Call `plinth_session_set_playhead(ptr, 7000)` then `plinth_session_get_playhead(ptr) == 7000` |
+
+### `crates/plinth-core/src/wasm.rs` (tested via `packages/web/plinth-js`)
+
+Covered by the plinth-js Layer 2 tests below via `wasmModuleOverride`.
+
+### `packages/web/plinth-js/tests/session.test.ts`
+
+| # | Test | Assertion |
+|---|---|---|
+| 6 | `getPlayhead() returns 0 before setPlayhead` | Mock `get_playhead` returns 0; assert `session.getPlayhead() === 0` |
+| 7 | `getPlayhead() delegates to WasmSession.get_playhead` | Mock `get_playhead` returns 12000; assert `session.getPlayhead() === 12000` |
+| 8 | `getPlayhead() returns 0 after destroy` | Call `destroy()` first; assert `session.getPlayhead() === 0` without calling Wasm |
+
+### `packages/web/plinth-hlsjs/tests/hlsjs.test.ts`
+
+| # | Test | Assertion |
+|---|---|---|
+| 9 | `getPlayhead() delegates to session.getPlayhead` | Set `mockSession.getPlayhead = mock(() => 8000)`; assert `instance.getPlayhead() === 8000` |
+| 10 | `getPlayhead() returns 0 after destroy` | `instance.destroy()` then `instance.getPlayhead() === 0` |
+
+### `packages/apple/plinth-apple` (Swift)
+
+| # | Test | Assertion |
+|---|---|---|
+| 11 | `getPlayhead returns 0 before setPlayhead` | Create session; `session.getPlayhead() == 0` |
+| 12 | `getPlayhead returns last set value` | `session.setPlayhead(55_000)` then `session.getPlayhead() == 55_000` |
+| 13 | `getPlayhead returns 0 after destroy` | `session.destroy()` then `session.getPlayhead() == 0` |
+
+### `packages/android/plinth-android` (Kotlin)
+
+| # | Test | Assertion |
+|---|---|---|
+| 14 | `getPlayhead returns 0 before setPlayhead` | Fake returns 0; assert `session.getPlayhead() == 0L` |
+| 15 | `getPlayhead returns value from jni` | Fake `sessionGetPlayhead` returns 9000; assert `session.getPlayhead() == 9000L` |
+| 16 | `getPlayhead returns 0 after destroy` | `destroy()`; assert `session.getPlayhead() == 0L` without calling JNI |
+
+---
+
+## Updated Relevant Files
+
+| File | Change |
+|---|---|
+| `crates/plinth-core/src/session.rs` | Add `get_playhead() -> u64`; set `b.playhead_ms` on `pause` and `session_end` beacons |
+| `crates/plinth-core/src/wasm.rs` | Add `get_playhead() -> f64` to `WasmSession` |
+| `crates/plinth-core/src/ffi.rs` | Add `plinth_session_get_playhead` C export |
+| `crates/plinth-core/src/jni.rs` | Add `Java_io_plinth_android_PlinthCoreJni_sessionGetPlayhead` JNI export |
+| `packages/apple/plinth-apple/Sources/PlinthCoreFFI/plinth_core.h` | Declare `plinth_session_get_playhead` |
+| `packages/web/plinth-js/src/types.ts` | Add `get_playhead()` to `WasmSessionLike` |
+| `packages/web/plinth-js/src/index.ts` | Add `getPlayhead()` to `PlinthSession` |
+| `packages/apple/plinth-apple/Sources/PlinthApple/PlinthSession.swift` | Add `getPlayhead() -> UInt64` |
+| `packages/android/plinth-android/src/main/java/io/plinth/android/CoreJni.kt` | Add `sessionGetPlayhead` to interface |
+| `packages/android/plinth-android/src/main/java/io/plinth/android/PlinthSession.kt` | Add `getPlayhead(): Long` |
+| `packages/web/plinth-hlsjs/src/index.ts` | Add `getPlayhead(): number` |
+| `packages/web/plinth-shaka/src/index.ts` | Add `getPlayhead(): number` |
+| `packages/apple/plinth-avplayer/Sources/PlinthAVPlayer/PlinthAVPlayer.swift` | Add `getPlayhead() -> UInt64` |
+| `packages/android/plinth-media3/src/main/java/io/plinth/media3/PlinthMedia3.kt` | Add `getPlayhead(): Long` |
 | `docs/reference/beacon-payload.schema.json` | Add `playhead_ms` to `Beacon.properties`; add `allOf` condition for `pause`/`session_end` |

@@ -13,3 +13,4 @@ Many services will run multiple client beacons, one to monitor quality of experi
 ## Implementation
 * The client will report the playhead position during playback
 * The server, in the future when it is built, will provide an API for retreiving the playback position.
+* The client will track the playhead position (as it already needs to do for sending beacons) and there will be a local, callable API that the developers can use to the get the latest position client-side.
