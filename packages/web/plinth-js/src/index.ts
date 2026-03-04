@@ -78,6 +78,12 @@ export class PlinthSession {
     this.wasmSession.set_playhead(playheadMs);
   }
 
+  /** Return the last playhead position reported by the platform, in milliseconds. */
+  getPlayhead(): number {
+    if (this.destroyed) return 0;
+    return this.wasmSession.get_playhead();
+  }
+
   /**
    * Tear down the session. Stops the heartbeat timer, posts any final beacons,
    * and frees the Wasm memory. Idempotent — safe to call more than once.

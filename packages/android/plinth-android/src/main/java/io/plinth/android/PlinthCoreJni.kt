@@ -56,6 +56,14 @@ internal object PlinthCoreJni : CoreJni {
     external override fun sessionSetPlayhead(ptr: Long, playheadMs: Long)
 
     /**
+     * Return the last playhead position reported by the platform, in milliseconds.
+     *
+     * @param ptr Session handle from [sessionNew].
+     * @return Playhead position in milliseconds, or 0 if ptr is 0.
+     */
+    external override fun sessionGetPlayhead(ptr: Long): Long
+
+    /**
      * Destroy the session, emit any final beacons, and free Rust memory.
      *
      * After this call [ptr] is invalid. Must be called exactly once.

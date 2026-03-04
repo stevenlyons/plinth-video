@@ -64,6 +64,12 @@ export class PlinthHlsJs {
     return instance;
   }
 
+  /** Return the last playhead position reported by the platform, in milliseconds. */
+  getPlayhead(): number {
+    if (this.destroyed) return 0;
+    return this.session.getPlayhead();
+  }
+
   /** Removes all event listeners and destroys the session. Idempotent. */
   destroy(): void {
     if (this.destroyed) return;

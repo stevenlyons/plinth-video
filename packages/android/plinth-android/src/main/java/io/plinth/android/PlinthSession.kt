@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -156,6 +157,19 @@ class PlinthSession private constructor(
         scope.launch(sessionDispatcher) {
             if (isDestroyed) return@launch
             jni.sessionSetPlayhead(ptr, ms)
+        }
+    }
+
+    /**
+     * Return the last playhead position reported by the platform, in milliseconds.
+     *
+     * Blocks briefly on the session dispatcher to safely read the value.
+     * Returns 0 if the session has been destroyed.
+     */
+    fun getPlayhead(): Long {
+        if (isDestroyed) return 0L
+        return runBlocking(sessionDispatcher) {
+            if (isDestroyed) 0L else jni.sessionGetPlayhead(ptr)
         }
     }
 

@@ -9,5 +9,6 @@ internal interface CoreJni {
     fun sessionProcessEvent(ptr: Long, eventJson: String, nowMs: Long): String
     fun sessionTick(ptr: Long, nowMs: Long): String
     fun sessionSetPlayhead(ptr: Long, playheadMs: Long)
+    fun sessionGetPlayhead(ptr: Long): Long
     fun sessionDestroy(ptr: Long, nowMs: Long): String
 }

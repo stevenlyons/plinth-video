@@ -63,6 +63,12 @@ export class PlinthShaka {
     return instance;
   }
 
+  /** Return the last playhead position reported by the platform, in milliseconds. */
+  getPlayhead(): number {
+    if (this.destroyed) return 0;
+    return this.session.getPlayhead();
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

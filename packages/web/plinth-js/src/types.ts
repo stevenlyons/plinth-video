@@ -101,6 +101,7 @@ export interface WasmSessionLike {
   tick(now_ms: number): string;
   destroy(now_ms: number): string;
   set_playhead(playhead_ms: number): void;
+  get_playhead(): number;
   free(): void;
 }
 

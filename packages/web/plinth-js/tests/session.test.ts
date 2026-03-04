@@ -32,6 +32,7 @@ function makeMockWasmSession(): WasmSessionLike & {
     tick: ReturnType<typeof mock>;
     destroy: ReturnType<typeof mock>;
     set_playhead: ReturnType<typeof mock>;
+    get_playhead: ReturnType<typeof mock>;
     free: ReturnType<typeof mock>;
   };
 } {
@@ -39,6 +40,7 @@ function makeMockWasmSession(): WasmSessionLike & {
   const tick_fn = mock(() => EMPTY_BATCH);
   const destroy_fn = mock(() => EMPTY_BATCH);
   const set_playhead_fn = mock(() => {});
+  const get_playhead_fn = mock(() => 0);
   const free_fn = mock(() => {});
 
   return {
@@ -46,12 +48,14 @@ function makeMockWasmSession(): WasmSessionLike & {
     tick: tick_fn,
     destroy: destroy_fn,
     set_playhead: set_playhead_fn,
+    get_playhead: get_playhead_fn,
     free: free_fn,
     _mocks: {
       process_event: process_event_fn,
       tick: tick_fn,
       destroy: destroy_fn,
       set_playhead: set_playhead_fn,
+      get_playhead: get_playhead_fn,
       free: free_fn,
     },
   };
@@ -211,6 +215,40 @@ describe("PlinthSession", () => {
       // set_playhead should not have been called after destroy
       const calls = mockWasmSession._mocks.set_playhead.mock.calls;
       expect(calls.length).toBe(0);
+    });
+  });
+
+  describe("getPlayhead()", () => {
+    it("delegates to WasmSession.get_playhead", async () => {
+      mockWasmSession._mocks.get_playhead.mockReturnValue(55_000);
+      const session = await PlinthSession.create(DEFAULT_META, DEFAULT_CONFIG, mockWasmModule);
+
+      expect(session.getPlayhead()).toBe(55_000);
+      expect(mockWasmSession._mocks.get_playhead).toHaveBeenCalledTimes(1);
+
+      session.destroy();
+    });
+
+    it("returns 0 after destroy()", async () => {
+      mockWasmSession._mocks.get_playhead.mockReturnValue(55_000);
+      const session = await PlinthSession.create(DEFAULT_META, DEFAULT_CONFIG, mockWasmModule);
+      session.destroy();
+
+      expect(session.getPlayhead()).toBe(0);
+      // get_playhead on the Wasm side must NOT be called after destroy
+      expect(mockWasmSession._mocks.get_playhead).not.toHaveBeenCalled();
+    });
+
+    it("reflects the value set by setPlayhead via the Wasm mock", async () => {
+      let storedMs = 0;
+      mockWasmSession._mocks.set_playhead.mockImplementation((ms: number) => { storedMs = ms; });
+      mockWasmSession._mocks.get_playhead.mockImplementation(() => storedMs);
+
+      const session = await PlinthSession.create(DEFAULT_META, DEFAULT_CONFIG, mockWasmModule);
+      session.setPlayhead(30_000);
+      expect(session.getPlayhead()).toBe(30_000);
+
+      session.destroy();
     });
   });
 

@@ -76,6 +76,11 @@ impl Session {
         self.playhead_ms = playhead_ms;
     }
 
+    /// Return the last playhead position reported by the platform, in milliseconds.
+    pub fn get_playhead(&self) -> u64 {
+        self.playhead_ms
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     fn snapshot_metrics(&self, now_ms: u64) -> Metrics {
@@ -1657,5 +1662,34 @@ mod tests {
         assert!(b.state.is_none(), "state must be absent on session_open");
         assert!(b.metrics.is_none(), "metrics must be absent on session_open");
         assert!(b.playhead_ms.is_none(), "playhead_ms must be absent on session_open");
+    }
+
+    // ── get_playhead ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn get_playhead_returns_zero_initially() {
+        let s = make_session();
+        assert_eq!(s.get_playhead(), 0);
+    }
+
+    #[test]
+    fn get_playhead_returns_last_set_value() {
+        let mut s = make_session();
+        s.set_playhead(42_000);
+        assert_eq!(s.get_playhead(), 42_000);
+        s.set_playhead(99_500);
+        assert_eq!(s.get_playhead(), 99_500);
+    }
+
+    #[test]
+    fn get_playhead_is_included_in_heartbeat_via_set_then_get() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.set_playhead(10_000);
+        assert_eq!(s.get_playhead(), 10_000);
+        // Heartbeat should also carry this value.
+        let beacons = s.tick(10_000);
+        let json = miniserde::json::to_string(&beacons[0]);
+        assert!(json.contains("\"playhead_ms\":10000"));
     }
 }

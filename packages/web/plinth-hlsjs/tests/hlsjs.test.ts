@@ -46,6 +46,7 @@ class FakeVideo extends EventTarget {
 interface MockSession {
   processEvent: ReturnType<typeof mock>;
   setPlayhead: ReturnType<typeof mock>;
+  getPlayhead: ReturnType<typeof mock>;
   destroy: ReturnType<typeof mock>;
 }
 
@@ -53,6 +54,7 @@ function makeMockSession(): MockSession {
   return {
     processEvent: mock(() => {}),
     setPlayhead: mock(() => {}),
+    getPlayhead: mock(() => 0),
     destroy: mock(() => {}),
   };
 }
@@ -356,5 +358,26 @@ describe("PlinthHlsJs", () => {
       to_ms: 5_000,
       buffer_ready: false,
     });
+  });
+
+  // 23. getPlayhead() delegates to session.getPlayhead()
+  it("getPlayhead() delegates to session.getPlayhead()", async () => {
+    mockSession.getPlayhead.mockReturnValue(45_000);
+    instance = await setup(hls, video, mockSession);
+
+    expect(instance.getPlayhead()).toBe(45_000);
+    expect(mockSession.getPlayhead).toHaveBeenCalledTimes(1);
+  });
+
+  // 24. getPlayhead() returns 0 and does not call session after destroy()
+  it("getPlayhead() returns 0 after destroy()", async () => {
+    mockSession.getPlayhead.mockReturnValue(45_000);
+    instance = await setup(hls, video, mockSession);
+    instance.destroy();
+    const result = instance.getPlayhead();
+    instance = null;
+
+    expect(result).toBe(0);
+    expect(mockSession.getPlayhead).not.toHaveBeenCalled();
   });
 });

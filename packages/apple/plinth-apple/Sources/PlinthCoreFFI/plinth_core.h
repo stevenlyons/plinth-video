@@ -58,6 +58,14 @@ char* plinth_session_tick(PlinthSession* session, uint64_t now_ms);
 void plinth_session_set_playhead(PlinthSession* session, uint64_t playhead_ms);
 
 /**
+ * Return the last playhead position reported by the platform, in milliseconds.
+ *
+ * @param session  Session pointer. Returns 0 if NULL.
+ * @return         Playhead position in milliseconds.
+ */
+uint64_t plinth_session_get_playhead(const PlinthSession* session);
+
+/**
  * Destroy the session and emit any final beacons.
  *
  * Frees the session pointer — do not use it after this call.

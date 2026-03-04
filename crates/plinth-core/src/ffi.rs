@@ -131,6 +131,17 @@ pub unsafe extern "C" fn plinth_session_set_playhead(ptr: *mut Session, playhead
     (*ptr).set_playhead(playhead_ms);
 }
 
+/// Return the last playhead position reported by the platform, in milliseconds.
+///
+/// Returns 0 if `ptr` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn plinth_session_get_playhead(ptr: *const Session) -> u64 {
+    if ptr.is_null() {
+        return 0;
+    }
+    (*ptr).get_playhead()
+}
+
 /// Destroy the session, emit any final beacons, and free all associated memory.
 ///
 /// After this call, `ptr` is invalid and must not be used again.
@@ -281,13 +292,32 @@ mod tests {
         }
     }
 
-    // ── set_playhead ──────────────────────────────────────────────────────────
+    // ── set_playhead / get_playhead ───────────────────────────────────────────
 
     #[test]
     fn set_playhead_null_ptr_is_no_op() {
         // Must not crash
         unsafe {
             plinth_session_set_playhead(std::ptr::null_mut(), 5_000);
+        }
+    }
+
+    #[test]
+    fn get_playhead_null_ptr_returns_zero() {
+        unsafe {
+            assert_eq!(plinth_session_get_playhead(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn get_playhead_returns_set_value() {
+        let meta = valid_meta_cstr();
+        unsafe {
+            let ptr = plinth_session_new(std::ptr::null(), meta.as_ptr(), 0);
+            assert!(!ptr.is_null());
+            plinth_session_set_playhead(ptr, 30_000);
+            assert_eq!(plinth_session_get_playhead(ptr), 30_000);
+            plinth_free_string(plinth_session_destroy(ptr, 0));
         }
     }
 

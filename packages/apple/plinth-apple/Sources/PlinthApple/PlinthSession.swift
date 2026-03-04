@@ -95,6 +95,12 @@ public final class PlinthSession {
         plinth_session_set_playhead(ptr, ms)
     }
 
+    /// Return the last playhead position reported by the platform, in milliseconds.
+    public func getPlayhead() -> UInt64 {
+        guard !isDestroyed else { return 0 }
+        return plinth_session_get_playhead(ptr)
+    }
+
     /// Tear down the session. Stops the timer, posts any final beacons, frees memory.
     /// Idempotent — safe to call more than once.
     public func destroy() {

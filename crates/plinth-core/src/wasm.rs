@@ -47,4 +47,8 @@ impl WasmSession {
     pub fn set_playhead(&mut self, playhead_ms: f64) {
         self.inner.set_playhead(playhead_ms as u64);
     }
+
+    pub fn get_playhead(&self) -> f64 {
+        self.inner.get_playhead() as f64
+    }
 }

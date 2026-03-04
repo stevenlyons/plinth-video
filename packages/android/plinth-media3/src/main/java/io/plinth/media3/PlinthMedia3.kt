@@ -198,6 +198,11 @@ class PlinthMedia3 private constructor(
     }
 
     /**
+     * Return the last playhead position reported by the platform, in milliseconds.
+     */
+    fun getPlayhead(): Long = session?.getPlayhead() ?: 0L
+
+    /**
      * Tear down all listeners and post any final beacons. Idempotent.
      */
     fun destroy() {

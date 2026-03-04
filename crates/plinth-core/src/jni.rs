@@ -147,6 +147,22 @@ pub extern "system" fn Java_io_plinth_android_PlinthCoreJni_sessionSetPlayhead(
     session.set_playhead(playhead_ms as u64);
 }
 
+/// Return the last playhead position reported by the platform, in milliseconds.
+///
+/// Returns 0 if `ptr` is 0.
+#[no_mangle]
+pub extern "system" fn Java_io_plinth_android_PlinthCoreJni_sessionGetPlayhead(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) -> jlong {
+    if ptr == 0 {
+        return 0;
+    }
+    let session = unsafe { &*(ptr as *const Session) };
+    session.get_playhead() as jlong
+}
+
 /// Destroy the session, emit any final beacons, and free all associated memory.
 ///
 /// After this call, `ptr` is invalid and must not be used again.

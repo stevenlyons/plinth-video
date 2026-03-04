@@ -159,6 +159,11 @@ public final class PlinthAVPlayer {
         }
     }
 
+    /// Return the last playhead position reported by the platform, in milliseconds.
+    public func getPlayhead() -> UInt64 {
+        return session?.getPlayhead() ?? 0
+    }
+
     /// Tear down all observers and post any final beacons. Idempotent.
     public func destroy() {
         guard !isDestroyed else { return }

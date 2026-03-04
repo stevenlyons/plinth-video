@@ -223,7 +223,7 @@ final class PlinthSessionTests: XCTestCase {
         XCTAssertEqual(errorJson["fatal"] as? Bool, true)
     }
 
-    // MARK: - setPlayhead
+    // MARK: - setPlayhead / getPlayhead
 
     func testSetPlayheadDoesNotCrash() {
         let session = PlinthSession.create(
@@ -233,6 +233,35 @@ final class PlinthSessionTests: XCTestCase {
         reachPlaying(session)
         session.setPlayhead(30_000)
         // No assertion needed — verifies no crash through FFI boundary
+    }
+
+    func testGetPlayheadReturnsZeroInitially() {
+        let session = PlinthSession.create(
+            meta: makeMeta(),
+            beaconHandler: { _ in }
+        )!
+        XCTAssertEqual(session.getPlayhead(), 0)
+        session.destroy()
+    }
+
+    func testGetPlayheadReturnsLastSetValue() {
+        let session = PlinthSession.create(
+            meta: makeMeta(),
+            beaconHandler: { _ in }
+        )!
+        session.setPlayhead(42_000)
+        XCTAssertEqual(session.getPlayhead(), 42_000)
+        session.destroy()
+    }
+
+    func testGetPlayheadReturnsZeroAfterDestroy() {
+        let session = PlinthSession.create(
+            meta: makeMeta(),
+            beaconHandler: { _ in }
+        )!
+        session.setPlayhead(42_000)
+        session.destroy()
+        XCTAssertEqual(session.getPlayhead(), 0)
     }
 
     // MARK: - Error events

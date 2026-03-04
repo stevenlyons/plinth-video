@@ -150,6 +150,37 @@ class PlinthSessionTest {
         assertThat(fake.setPlayheadCalls).isEmpty()
     }
 
+    // ── getPlayhead ───────────────────────────────────────────────────────────
+
+    @Test fun `getPlayhead returns 0 initially`() = runTest {
+        val fake = FakeCoreJni()
+        val session = makeSession(fake)
+
+        assertThat(session.getPlayhead()).isEqualTo(0L)
+    }
+
+    @Test fun `getPlayhead returns last value set via setPlayhead`() = runTest {
+        val fake = FakeCoreJni()
+        val session = makeSession(fake)
+
+        session.setPlayhead(25_000L)
+        advanceUntilIdle()
+
+        assertThat(session.getPlayhead()).isEqualTo(25_000L)
+    }
+
+    @Test fun `getPlayhead returns 0 after destroy`() = runTest {
+        val fake = FakeCoreJni()
+        val session = makeSession(fake)
+
+        session.setPlayhead(25_000L)
+        advanceUntilIdle()
+        session.destroy()
+        advanceUntilIdle()
+
+        assertThat(session.getPlayhead()).isEqualTo(0L)
+    }
+
     // ── destroy ───────────────────────────────────────────────────────────────
 
     @Test fun `destroy calls sessionDestroy on jni`() = runTest {
@@ -411,6 +442,9 @@ class FakeCoreJni(val sessionNewResult: Long = 1L) : CoreJni {
     var destroyCalled = false
     var destroyCallCount = 0
 
+    // Simple in-memory playhead so getPlayhead returns what setPlayhead stored.
+    private var storedPlayheadMs: Long = 0L
+
     val processEventResponses = ArrayDeque<String>()
     val tickResponses = ArrayDeque<String>()
     var destroyResponse = """{"beacons":[]}"""
@@ -430,7 +464,10 @@ class FakeCoreJni(val sessionNewResult: Long = 1L) : CoreJni {
 
     override fun sessionSetPlayhead(ptr: Long, playheadMs: Long) {
         setPlayheadCalls.add(playheadMs)
+        storedPlayheadMs = playheadMs
     }
+
+    override fun sessionGetPlayhead(ptr: Long): Long = storedPlayheadMs
 
     override fun sessionDestroy(ptr: Long, nowMs: Long): String {
         destroyCalled = true
