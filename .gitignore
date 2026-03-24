@@ -1,3 +1,6 @@
+**/.DS_Store
+.tool-versions
+
 # XCFramework build output
 PlinthCoreFFI.xcframework/
 target/xcframework-staging/
@@ -161,4 +164,3 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-.DS_Store
