@@ -15,6 +15,12 @@
     "dist",
     "wasm"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stevenlyons/plinth-telemetry/",
+    "directory": "packages/web/plinth-js"
+  },
   "keywords": [
     "video",
     "qoe",

@@ -14,6 +14,12 @@
   "files": [
     "dist"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stevenlyons/plinth-telemetry/",
+    "directory": "packages/web/plinth-hlsjs"
+  },
   "keywords": [
     "video",
     "qoe",
