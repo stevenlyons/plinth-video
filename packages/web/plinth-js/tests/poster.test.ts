@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import assert from "node:assert/strict";
 import { postBeacons } from "../src/poster.js";
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -8,50 +9,62 @@ describe("postBeacons", () => {
   const PROJECT_KEY = "p123456789";
   const BATCH_JSON = JSON.stringify({ beacons: [{ seq: 0, event: "session_open" }] });
 
+  let fetchMock: ReturnType<typeof mock.fn>;
+  let originalFetch: typeof globalThis.fetch;
+
   beforeEach(() => {
-    globalThis.fetch = mock(() => Promise.resolve(new Response(null, { status: 200 })));
+    originalFetch = globalThis.fetch;
+    fetchMock = mock.fn(() => Promise.resolve(new Response(null, { status: 200 })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
   it("sets method POST", async () => {
     await postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON);
 
-    const [, init] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
-    expect(init.method).toBe("POST");
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
+    assert.strictEqual(init.method, "POST");
   });
 
   it("sets keepalive true", async () => {
     await postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON);
 
-    const [, init] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
-    expect(init.keepalive).toBe(true);
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
+    assert.strictEqual(init.keepalive, true);
   });
 
   it("sets Content-Type header to application/json", async () => {
     await postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON);
 
-    const [, init] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers["Content-Type"]).toBe("application/json");
+    assert.strictEqual(headers["Content-Type"], "application/json");
   });
 
   it("sets X-Project-Key header to the provided project key", async () => {
     await postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON);
 
-    const [, init] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers["X-Project-Key"]).toBe(PROJECT_KEY);
+    assert.strictEqual(headers["X-Project-Key"], PROJECT_KEY);
   });
 
   it("sends batch JSON as body", async () => {
     await postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON);
 
-    const [, init] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toBe(BATCH_JSON);
+    const [, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
+    assert.strictEqual(init.body, BATCH_JSON);
   });
 
   it("rejects when fetch throws a network error", async () => {
-    globalThis.fetch = mock(() => Promise.reject(new TypeError("network error")));
+    globalThis.fetch = mock.fn(() => Promise.reject(new TypeError("network error"))) as unknown as typeof fetch;
 
-    await expect(postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON)).rejects.toThrow("network error");
+    await assert.rejects(
+      postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON),
+      { message: "network error" },
+    );
   });
 });

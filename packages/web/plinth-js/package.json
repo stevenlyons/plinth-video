@@ -5,10 +5,10 @@
   "main": "src/index.ts",
   "scripts": {
     "build:wasm": "wasm-pack build ../../../crates/plinth-core --target web --out-dir ./wasm",
-    "test": "bun test"
+    "test": "node --test --import tsx/esm tests/*.test.ts"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "@types/bun": "latest"
+    "@types/node": "^22.0.0"
   }
 }

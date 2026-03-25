@@ -110,14 +110,14 @@ Critical seek guard: `pre_seek_state` must be tracked. `seekEnd` resolves to `Pl
 | Component | Location | Language | Toolchain |
 |---|---|---|---|
 | `plinth-core` | `crates/plinth-core/` | Rust | `cargo`, `wasm-pack` for Wasm target |
-| `plinth-js` | `packages/web/plinth-js/` | TypeScript | `bun` |
-| `plinth-hlsjs` | `packages/web/plinth-hlsjs/` | TypeScript | `bun` |
-| `plinth-shaka` | `packages/web/plinth-shaka/` | TypeScript | `bun` |
+| `plinth-js` | `packages/web/plinth-js/` | TypeScript | `pnpm` |
+| `plinth-hlsjs` | `packages/web/plinth-hlsjs/` | TypeScript | `pnpm` |
+| `plinth-shaka` | `packages/web/plinth-shaka/` | TypeScript | `pnpm` |
 | `plinth-apple` | `packages/apple/plinth-apple/` | Swift | Xcode / Swift Package Manager |
 | `plinth-avplayer` | `packages/apple/plinth-avplayer/` | Swift | Xcode / Swift Package Manager |
 | `plinth-android` | `packages/android/plinth-android/` | Kotlin | Gradle |
 | `plinth-media3` | `packages/android/plinth-media3/` | Kotlin | Gradle |
-| Web demo | `samples/web/` | TypeScript | `bun` |
+| Web demo | `samples/web/` | TypeScript | `pnpm` |
 
 ## Build Commands
 
@@ -131,12 +131,12 @@ cargo test -p plinth-core -- <test_name>   # run single test
 wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js/wasm
 
 # JS packages (from repo root or package dir)
-bun install
-bun test                                   # run all web tests
-bun test --cwd packages/web/plinth-js      # run one package
+pnpm install
+pnpm -r test                               # run all web tests
+pnpm --filter @plinth/js test              # run one package's tests
 
 # Web demo server
-bun run samples/web/server.ts              # serves at http://localhost:3000
+pnpm --filter @plinth/dev start            # serves at http://localhost:3000
                                            # Shaka demo at http://localhost:3000/shaka
 
 # Swift (from packages/apple/plinth-apple/)

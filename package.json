@@ -1,5 +1,8 @@
 {
   "name": "plinth-video",
   "private": true,
-  "workspaces": ["packages/web/*", "samples/web"]
+  "packageManager": "pnpm@10.32.1",
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
 }

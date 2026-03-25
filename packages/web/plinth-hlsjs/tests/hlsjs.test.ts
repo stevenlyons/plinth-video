@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import assert from "node:assert/strict";
 import Hls, { Events } from "hls.js";
 import { PlinthHlsJs } from "../src/index.js";
 import type { PlinthSession } from "@plinth/js";
@@ -44,18 +45,18 @@ class FakeVideo extends EventTarget {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 interface MockSession {
-  processEvent: ReturnType<typeof mock>;
-  setPlayhead: ReturnType<typeof mock>;
-  getPlayhead: ReturnType<typeof mock>;
-  destroy: ReturnType<typeof mock>;
+  processEvent: ReturnType<typeof mock.fn>;
+  setPlayhead: ReturnType<typeof mock.fn>;
+  getPlayhead: ReturnType<typeof mock.fn>;
+  destroy: ReturnType<typeof mock.fn>;
 }
 
 function makeMockSession(): MockSession {
   return {
-    processEvent: mock(() => {}),
-    setPlayhead: mock(() => {}),
-    getPlayhead: mock(() => 0),
-    destroy: mock(() => {}),
+    processEvent: mock.fn(() => {}),
+    setPlayhead: mock.fn(() => {}),
+    getPlayhead: mock.fn(() => 0),
+    destroy: mock.fn(() => {}),
   };
 }
 
@@ -64,13 +65,25 @@ async function setup(
   video: FakeVideo,
   mockSession: MockSession,
 ): Promise<PlinthHlsJs> {
-  const sessionFactory = mock(async () => mockSession as unknown as PlinthSession);
+  const sessionFactory = mock.fn(async () => mockSession as unknown as PlinthSession);
   return PlinthHlsJs.initialize(
     hls as unknown as Hls,
     video as unknown as HTMLVideoElement,
     { id: "vid-001", title: "Test Video" },
     { sessionFactory },
   );
+}
+
+function assertCalledWith(fn: ReturnType<typeof mock.fn>, ...expected: unknown[]): void {
+  const matched = fn.mock.calls.some((call) => {
+    try {
+      assert.deepStrictEqual([...call.arguments], expected);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  assert.ok(matched, `Mock was not called with expected arguments: ${JSON.stringify(expected)}`);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -98,7 +111,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     hls.emit(Events.MANIFEST_LOADING, { url: "http://example.com/test.m3u8" });
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "load",
       src: "http://example.com/test.m3u8",
     });
@@ -109,7 +122,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     hls.emit(Events.MANIFEST_PARSED, {});
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "can_play" });
+    assertCalledWith(mockSession.processEvent, { type: "can_play" });
   });
 
   // 3. video play → play
@@ -117,7 +130,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("play");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "play" });
+    assertCalledWith(mockSession.processEvent, { type: "play" });
   });
 
   // 4. video playing → first_frame
@@ -125,7 +138,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("playing");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "first_frame" });
+    assertCalledWith(mockSession.processEvent, { type: "first_frame" });
   });
 
   // 5. video waiting → waiting
@@ -133,7 +146,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("waiting");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "waiting" });
+    assertCalledWith(mockSession.processEvent, { type: "waiting" });
   });
 
   // 6. video pause → pause
@@ -141,7 +154,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("pause");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "pause" });
+    assertCalledWith(mockSession.processEvent, { type: "pause" });
   });
 
   // 7. video ended → ended
@@ -149,7 +162,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("ended");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "ended" });
+    assertCalledWith(mockSession.processEvent, { type: "ended" });
   });
 
   // 8. video canplaythrough → can_play_through
@@ -157,7 +170,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     video.fire("canplaythrough");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({ type: "can_play_through" });
+    assertCalledWith(mockSession.processEvent, { type: "can_play_through" });
   });
 
   // 9. video timeupdate → setPlayhead(ms)
@@ -166,7 +179,7 @@ describe("PlinthHlsJs", () => {
     video.currentTime = 12.5;
     video.fire("timeupdate");
 
-    expect(mockSession.setPlayhead).toHaveBeenCalledWith(12_500);
+    assertCalledWith(mockSession.setPlayhead, 12_500);
   });
 
   // 10. video seeking → seek_start with lastPlayheadMs
@@ -176,9 +189,10 @@ describe("PlinthHlsJs", () => {
     video.fire("timeupdate");
     video.fire("seeking");
 
-    const calls = mockSession.processEvent.mock.calls as unknown[][];
-    const seekCall = calls.find((c) => (c[0] as any).type === "seek_start");
-    expect(seekCall?.[0]).toEqual({ type: "seek_start", from_ms: 5_000 });
+    const seekCall = mockSession.processEvent.mock.calls.find(
+      (c) => (c.arguments[0] as any).type === "seek_start",
+    );
+    assert.deepStrictEqual(seekCall?.arguments[0], { type: "seek_start", from_ms: 5_000 });
   });
 
   // 11. video seeked (buffer ready) → seek_end buffer_ready:true
@@ -192,7 +206,7 @@ describe("PlinthHlsJs", () => {
     } as unknown as TimeRanges;
     video.fire("seeked");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "seek_end",
       to_ms: 5_000,
       buffer_ready: true,
@@ -210,7 +224,7 @@ describe("PlinthHlsJs", () => {
     } as unknown as TimeRanges;
     video.fire("seeked");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "seek_end",
       to_ms: 15_000,
       buffer_ready: false,
@@ -222,7 +236,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     hls.emit(Events.LEVEL_SWITCHED, { level: 0 });
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "quality_change",
       quality: {
         bitrate_bps: 2_500_000,
@@ -242,7 +256,7 @@ describe("PlinthHlsJs", () => {
       details: "manifestLoadError",
     });
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "error",
       code: "networkError",
       message: "manifestLoadError",
@@ -259,7 +273,7 @@ describe("PlinthHlsJs", () => {
       details: "fragLoadError",
     });
 
-    expect(mockSession.processEvent).not.toHaveBeenCalled();
+    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
   });
 
   // 16. DESTROYING → session.destroy()
@@ -267,7 +281,7 @@ describe("PlinthHlsJs", () => {
     instance = await setup(hls, video, mockSession);
     hls.emit(Events.DESTROYING);
 
-    expect(mockSession.destroy).toHaveBeenCalledTimes(1);
+    assert.strictEqual(mockSession.destroy.mock.callCount(), 1);
     instance = null; // already destroyed, prevent double destroy in afterEach
   });
 
@@ -277,7 +291,7 @@ describe("PlinthHlsJs", () => {
     video.error = { code: 3, message: "MEDIA_ERR_DECODE" };
     video.fire("error");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "error",
       code: "MEDIA_ERR_3",
       fatal: true,
@@ -294,8 +308,8 @@ describe("PlinthHlsJs", () => {
     hls.emit(Events.MANIFEST_LOADING, { url: "http://example.com/test.m3u8" });
     video.fire("play");
 
-    expect(mockSession.processEvent).not.toHaveBeenCalled();
-    expect(mockSession.destroy).toHaveBeenCalledTimes(1);
+    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
+    assert.strictEqual(mockSession.destroy.mock.callCount(), 1);
   });
 
   // 19. destroy() is idempotent
@@ -305,7 +319,7 @@ describe("PlinthHlsJs", () => {
     instance.destroy();
     instance = null;
 
-    expect(mockSession.destroy).toHaveBeenCalledTimes(1);
+    assert.strictEqual(mockSession.destroy.mock.callCount(), 1);
   });
 
   // 20. seeked: currentTime falls in first of multiple ranges → buffer_ready: true
@@ -320,7 +334,7 @@ describe("PlinthHlsJs", () => {
     } as unknown as TimeRanges;
     video.fire("seeked");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "seek_end",
       to_ms: 3_000,
       buffer_ready: true,
@@ -339,7 +353,7 @@ describe("PlinthHlsJs", () => {
     } as unknown as TimeRanges;
     video.fire("seeked");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "seek_end",
       to_ms: 7_000,
       buffer_ready: false,
@@ -353,7 +367,7 @@ describe("PlinthHlsJs", () => {
     // FakeVideo.buffered defaults to length: 0
     video.fire("seeked");
 
-    expect(mockSession.processEvent).toHaveBeenCalledWith({
+    assertCalledWith(mockSession.processEvent, {
       type: "seek_end",
       to_ms: 5_000,
       buffer_ready: false,
@@ -362,22 +376,22 @@ describe("PlinthHlsJs", () => {
 
   // 23. getPlayhead() delegates to session.getPlayhead()
   it("getPlayhead() delegates to session.getPlayhead()", async () => {
-    mockSession.getPlayhead.mockReturnValue(45_000);
+    mockSession.getPlayhead.mock.mockImplementation(() => 45_000);
     instance = await setup(hls, video, mockSession);
 
-    expect(instance.getPlayhead()).toBe(45_000);
-    expect(mockSession.getPlayhead).toHaveBeenCalledTimes(1);
+    assert.strictEqual(instance.getPlayhead(), 45_000);
+    assert.strictEqual(mockSession.getPlayhead.mock.callCount(), 1);
   });
 
   // 24. getPlayhead() returns 0 and does not call session after destroy()
   it("getPlayhead() returns 0 after destroy()", async () => {
-    mockSession.getPlayhead.mockReturnValue(45_000);
+    mockSession.getPlayhead.mock.mockImplementation(() => 45_000);
     instance = await setup(hls, video, mockSession);
     instance.destroy();
     const result = instance.getPlayhead();
     instance = null;
 
-    expect(result).toBe(0);
-    expect(mockSession.getPlayhead).not.toHaveBeenCalled();
+    assert.strictEqual(result, 0);
+    assert.strictEqual(mockSession.getPlayhead.mock.callCount(), 0);
   });
 });
