@@ -23,6 +23,7 @@ plinth-core (Rust)
 | [pnpm](https://pnpm.io) | JS package manager (version pinned via `packageManager` field — use [corepack](https://nodejs.org/api/corepack.html)) |
 | Xcode + Swift | Build and test Apple packages |
 | Android Studio + JDK | Build and test Android packages |
+| [Gradle](https://gradle.org/install/) | Generate the `gradlew` wrapper (one-time setup) |
 
 Enable corepack to use the pinned pnpm version automatically:
 
@@ -38,6 +39,9 @@ pnpm install
 
 # Build the Rust core (required before running Swift tests)
 cargo build -p plinth-core
+
+# Generate the Gradle wrapper for Android (one-time, requires Gradle installed — e.g. brew install gradle)
+gradle wrapper
 
 # Build the Wasm target (required before running JS tests against real Wasm)
 # Prefix PATH if Homebrew Rust is also installed — wasm-pack requires rustup's toolchain
