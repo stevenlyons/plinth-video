@@ -1,7 +1,7 @@
 import Foundation
 import PlinthCoreFFI
 
-/// Platform framework for plinth-video on Apple platforms.
+/// Platform framework for plinth-telemetry on Apple platforms.
 ///
 /// Wraps the Rust core via C FFI, drives a repeating timer for heartbeats,
 /// and posts beacon batches via an injected async handler.

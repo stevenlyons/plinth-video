@@ -21,7 +21,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Android sample app for plinth-video.
+ * Android sample app for plinth-telemetry.
  *
  * Mirrors the macOS demo: plays a test HLS stream and shows a scrolling
  * colour-coded beacon log on the right side of the screen.

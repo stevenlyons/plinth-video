@@ -7,7 +7,7 @@ In addition to monitoring the video quality of experience, the same data, namely
 Many services will run multiple client beacons, one to monitor quality of experience and playback quality, one for tracking engagement, and another for playback position. This causes the client to experience more stress on the playback and more network traffic, both of which can impact playback quality. 
 
 ## Goals
-* Allow implementors of plinth-video to track the playhead value of where users ended watching a video so they can restart a new viewing session where the viewer left off.
+* Allow implementors of plinth-telemetry to track the playhead value of where users ended watching a video so they can restart a new viewing session where the viewer left off.
 * Reduce the amount of data trackers that need to be run on the client by proving data for playback monitoring and playback position. 
 
 ## Implementation

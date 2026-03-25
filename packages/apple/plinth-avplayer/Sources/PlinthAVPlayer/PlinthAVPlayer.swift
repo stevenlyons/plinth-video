@@ -17,7 +17,7 @@ public struct AVVideoMeta {
 
 // MARK: - PlinthAVPlayer
 
-/// Layer-3 AVPlayer integration for plinth-video.
+/// Layer-3 AVPlayer integration for plinth-telemetry.
 ///
 /// Maps AVPlayer KVO observations and notifications to `PlinthSession` events.
 ///

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import Hls, { Events } from "hls.js";
 import { PlinthHlsJs } from "../src/index.js";
-import type { PlinthSession } from "@plinth/js";
+import type { PlinthSession } from "@wirevice/plinth-js";
 
 // ── Fake Hls ──────────────────────────────────────────────────────────────────
 

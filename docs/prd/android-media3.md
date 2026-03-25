@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add Android platform support to plinth-video by implementing two new layers following the established three-layer architecture:
+Add Android platform support to plinth-telemetry by implementing two new layers following the established three-layer architecture:
 
 - **`plinth-android`** — Layer 2 Kotlin platform framework wrapping the Rust core via JNI
 - **`plinth-media3`** — Layer 3 Media3 player integration

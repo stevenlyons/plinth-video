@@ -1,5 +1,5 @@
-import { PlinthSession } from "@plinth/js";
-import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
+import { PlinthSession } from "@wirevice/plinth-js";
+import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 export interface VideoMeta {
   id: string;

@@ -1,6 +1,6 @@
-import { PlinthShaka } from "@plinth/shaka";
-import { PlinthSession } from "@plinth/js";
-import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
+import { PlinthShaka } from "@wirevice/plinth-shaka";
+import { PlinthSession } from "@wirevice/plinth-js";
+import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 import shaka from "shaka-player";
 
 function log(msg: string) {

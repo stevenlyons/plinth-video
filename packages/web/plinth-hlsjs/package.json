@@ -1,5 +1,5 @@
 {
-  "name": "@plinth/hlsjs",
+  "name": "@wirevice/plinth-hlsjs",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,7 +7,7 @@
     "test": "node --test --import tsx/esm tests/*.test.ts"
   },
   "dependencies": {
-    "@plinth/js": "workspace:*"
+    "@wirevice/plinth-js": "workspace:*"
   },
   "peerDependencies": {
     "hls.js": "^1.0.0"

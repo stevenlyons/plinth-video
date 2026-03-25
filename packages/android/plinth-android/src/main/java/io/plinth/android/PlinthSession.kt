@@ -19,7 +19,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * Platform framework for plinth-video on Android.
+ * Platform framework for plinth-telemetry on Android.
  *
  * Wraps the Rust core via JNI, drives a repeating coroutine for heartbeats,
  * and posts beacon batches via an injected handler.

@@ -1,5 +1,5 @@
 {
-  "name": "@plinth/dev",
+  "name": "@wirevice/plinth-dev",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -7,10 +7,10 @@
     "start": "bun run server.ts"
   },
   "dependencies": {
-    "@plinth/hlsjs": "workspace:*",
-    "@plinth/js": "workspace:*",
-    "@plinth/shaka": "workspace:*",
-    "@plinth/dashjs": "workspace:*",
+    "@wirevice/plinth-hlsjs": "workspace:*",
+    "@wirevice/plinth-js": "workspace:*",
+    "@wirevice/plinth-shaka": "workspace:*",
+    "@wirevice/plinth-dashjs": "workspace:*",
     "hls.js": "^1.0.0",
     "dashjs": "^5.0.0",
     "shaka-player": "^4.0.0"

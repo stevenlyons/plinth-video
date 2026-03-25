@@ -15,7 +15,7 @@ Your player  →  [Layer 3: player integration]  →  PlinthSession  →  Rust c
 
 ### 1. Choose a platform
 
-- **Web**: create a TypeScript package in `packages/`, depend on `@plinth/js`
+- **Web**: create a TypeScript package in `packages/`, depend on `@wirevice/plinth-js`
 - **Apple**: add a new Swift target to `packages/plinth-swift/Package.swift`, depend on `PlinthSwift`
 
 ### 2. Implement `initialize` / `destroy`
@@ -99,7 +99,7 @@ See `packages/plinth-hlsjs/src/index.test.ts` (web) and `Tests/PlinthAVPlayerTes
 
 | Component | Package name | Class name |
 |---|---|---|
-| Hls.js (web) | `@plinth/hlsjs` | `PlinthHlsJs` |
+| Hls.js (web) | `@wirevice/plinth-hlsjs` | `PlinthHlsJs` |
 | AVPlayer (Apple) | `PlinthAVPlayer` (SPM target) | `PlinthAVPlayer` |
-| Your player (web) | `@plinth/<playername>` | `Plinth<PlayerName>` |
+| Your player (web) | `@wirevice/plinth-<playername>` | `Plinth<PlayerName>` |
 | Your player (Swift) | `Plinth<PlayerName>` (SPM target) | `Plinth<PlayerName>` |

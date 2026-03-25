@@ -15,7 +15,7 @@ plinth-core (Rust / Wasm)
               └── Application code
 ```
 
-`plinth-shaka` depends on `@plinth/js` (workspace) and `shaka-player` (peer dependency). It never imports from `plinth-hlsjs`.
+`plinth-shaka` depends on `@wirevice/plinth-js` (workspace) and `shaka-player` (peer dependency). It never imports from `plinth-hlsjs`.
 
 ---
 
@@ -56,7 +56,7 @@ interface PlinthSession {
 
 ```json
 {
-  "name": "@plinth/shaka",
+  "name": "@wirevice/plinth-shaka",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -64,7 +64,7 @@ interface PlinthSession {
     "test": "bun test"
   },
   "dependencies": {
-    "@plinth/js": "workspace:*"
+    "@wirevice/plinth-js": "workspace:*"
   },
   "peerDependencies": {
     "shaka-player": "^4.0.0"
@@ -120,7 +120,7 @@ export interface VideoMeta {
   title?: string;
 }
 
-export type { PlinthConfig, SessionMeta } from "@plinth/js";
+export type { PlinthConfig, SessionMeta } from "@wirevice/plinth-js";
 ```
 
 `initialize` is `async` because `PlinthSession.create` loads Wasm on first call. Subsequent calls return immediately from cache. The returned instance must be retained by the caller. `destroy` is idempotent.
@@ -536,7 +536,7 @@ bun test --cwd packages/plinth-shaka
 cd packages/plinth-shaka && bun test
 ```
 
-No Wasm build step is required. `plinth-shaka` depends on `@plinth/js` which includes pre-built Wasm, but tests bypass the real Wasm via `sessionFactory`.
+No Wasm build step is required. `plinth-shaka` depends on `@wirevice/plinth-js` which includes pre-built Wasm, but tests bypass the real Wasm via `sessionFactory`.
 
 ---
 
