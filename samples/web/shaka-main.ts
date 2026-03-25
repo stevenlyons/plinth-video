@@ -1,8 +1,7 @@
 import { PlinthShaka } from "@plinth/shaka";
 import { PlinthSession } from "@plinth/js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
-
-declare const shaka: any;
+import shaka from "shaka-player";
 
 function log(msg: string) {
   const ul = document.getElementById("log")!;

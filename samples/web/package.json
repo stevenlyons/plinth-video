@@ -12,7 +12,8 @@
     "@plinth/shaka": "workspace:*",
     "@plinth/dashjs": "workspace:*",
     "hls.js": "^1.0.0",
-    "dashjs": "^5.0.0"
+    "dashjs": "^5.0.0",
+    "shaka-player": "^4.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest"
