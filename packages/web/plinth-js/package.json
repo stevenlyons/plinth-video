@@ -1,5 +1,5 @@
 {
-  "name": "@plinth/js",
+  "name": "@wirevice/plinth-js",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",

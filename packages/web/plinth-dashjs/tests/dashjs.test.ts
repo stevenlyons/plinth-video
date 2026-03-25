@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import { PlinthDashjs } from "../src/index.js";
-import type { PlinthSession } from "@plinth/js";
+import type { PlinthSession } from "@wirevice/plinth-js";
 
 // ── FakePlayer ────────────────────────────────────────────────────────────────
 

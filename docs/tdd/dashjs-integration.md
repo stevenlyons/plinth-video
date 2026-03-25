@@ -17,7 +17,7 @@ plinth-core (Rust / Wasm)
               └── Application code
 ```
 
-`plinth-dashjs` depends on `@plinth/js` (workspace) and `dashjs` (peer dependency). It never imports from `plinth-hlsjs` or `plinth-shaka`.
+`plinth-dashjs` depends on `@wirevice/plinth-js` (workspace) and `dashjs` (peer dependency). It never imports from `plinth-hlsjs` or `plinth-shaka`.
 
 ---
 
@@ -59,7 +59,7 @@ interface PlinthSession {
 
 ```json
 {
-  "name": "@plinth/dashjs",
+  "name": "@wirevice/plinth-dashjs",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -67,7 +67,7 @@ interface PlinthSession {
     "test": "bun test"
   },
   "dependencies": {
-    "@plinth/js": "workspace:*"
+    "@wirevice/plinth-js": "workspace:*"
   },
   "peerDependencies": {
     "dashjs": "^5.0.0"
@@ -123,7 +123,7 @@ export interface VideoMeta {
   title?: string;
 }
 
-export type { PlinthConfig, SessionMeta } from "@plinth/js";
+export type { PlinthConfig, SessionMeta } from "@wirevice/plinth-js";
 ```
 
 `initialize` is `async` because `PlinthSession.create` loads Wasm on first call. The returned instance must be retained by the caller. `destroy` is idempotent.
@@ -507,7 +507,7 @@ Following the Shaka sample pattern:
 - `samples/web/dashjs-main.ts` — `import { MediaPlayer } from 'dashjs'`; calls `PlinthDashjs.initialize` before `player.initialize(video, url, false)`
 - `samples/web/server.ts` — add a third Bun build entry for `dashjs-main.ts`; add `/dashjs` route serving `dashjs.html`
 - `samples/web/home.html` — add a third demo card linking to `/dashjs`
-- `samples/web/package.json` — add `"@plinth/dashjs": "workspace:*"` and `"dashjs": "^5.0.0"`
+- `samples/web/package.json` — add `"@wirevice/plinth-dashjs": "workspace:*"` and `"dashjs": "^5.0.0"`
 
 Unlike Hls.js (externalled, loaded from CDN) and Shaka (UMD global, loaded via `<script>`), dash.js v5 is bundled directly by Bun because it ships native ESM. No `external` declaration or UMD global workaround is needed.
 
@@ -561,4 +561,4 @@ No Wasm build step required. Tests bypass real Wasm via `sessionFactory`.
 | `samples/web/dashjs-main.ts` | Demo entry point |
 | `samples/web/server.ts` | Updated to build and serve `/dashjs` |
 | `samples/web/home.html` | Updated with dash.js demo card |
-| `samples/web/package.json` | Updated with `@plinth/dashjs` and `dashjs` deps |
+| `samples/web/package.json` | Updated with `@wirevice/plinth-dashjs` and `dashjs` deps |

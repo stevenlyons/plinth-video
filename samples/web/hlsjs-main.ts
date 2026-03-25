@@ -1,7 +1,7 @@
 import Hls from "hls.js";
-import { PlinthHlsJs } from "@plinth/hlsjs";
-import { PlinthSession } from "@plinth/js";
-import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
+import { PlinthHlsJs } from "@wirevice/plinth-hlsjs";
+import { PlinthSession } from "@wirevice/plinth-js";
+import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 function log(msg: string) {
   const ul = document.getElementById("log")!;

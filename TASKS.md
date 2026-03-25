@@ -56,7 +56,7 @@ A proof-of-concept SDK framework for measuring Video Quality of Experience acros
 
 ### Phase 6 — Browser Demo + Dev Server (`dev/`)
 
-- [x] Create `dev/` workspace (`@plinth/dev`) with Bun
+- [x] Create `dev/` workspace (`@wirevice/plinth-dev`) with Bun
 - [x] Implement `dev/server.ts`: builds `main.ts`, copies wasm binary to dist, serves static files, receives and logs `POST /beacon`
 - [x] Implement `dev/index.html`: dark-themed UI with video element, HLS URL input, Load button, live event log panel
 - [x] Implement `dev/main.ts`: wires Hls.js + PlinthHlsJs with `loggingSessionFactory` that mirrors each event to the page log

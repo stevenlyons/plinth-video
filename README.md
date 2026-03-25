@@ -1,4 +1,4 @@
-# plinth-video
+# plinth-telemetry
 
 A proof-of-concept multi-platform Video Quality of Experience (QoE) SDK. Measures playback metrics (Video Start Time, Rebuffer Time, Played Time, Watched Time) and reports them via HTTP beacons.
 
@@ -61,10 +61,10 @@ cargo test -p plinth-core -- <test_name>   # single test
 
 ```bash
 pnpm -r test                               # all web packages
-pnpm --filter @plinth/js test              # plinth-js only
-pnpm --filter @plinth/hlsjs test           # plinth-hlsjs only
-pnpm --filter @plinth/shaka test           # plinth-shaka only
-pnpm --filter @plinth/dashjs test          # plinth-dashjs only
+pnpm --filter @wirevice/plinth-js test              # plinth-js only
+pnpm --filter @wirevice/plinth-hlsjs test           # plinth-hlsjs only
+pnpm --filter @wirevice/plinth-shaka test           # plinth-shaka only
+pnpm --filter @wirevice/plinth-dashjs test          # plinth-dashjs only
 ```
 
 ### Swift
@@ -86,7 +86,7 @@ swift test
 The demo server bundles the TypeScript entry points and serves player demo pages.
 
 ```bash
-pnpm --filter @plinth/dev start
+pnpm --filter @wirevice/plinth-dev start
 ```
 
 | URL | Player |

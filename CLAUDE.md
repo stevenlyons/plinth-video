@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**plinth-video** is a multi-platform Video Quality of Experience (QoE) SDK framework — a proof-of-concept. It measures playback metrics (Video Start Time, Rebuffer Time, Played Time, Watched Time) and reports them via HTTP beacons.
+**plinth-telemetry** is a multi-platform Video Quality of Experience (QoE) SDK framework — a proof-of-concept. It measures playback metrics (Video Start Time, Rebuffer Time, Played Time, Watched Time) and reports them via HTTP beacons.
 
 ## Process
 
@@ -46,7 +46,7 @@ plinth-core (Rust)
 ## Repository Layout
 
 ```
-plinth-video/
+plinth-telemetry/
 ├── crates/                        # Rust
 │   └── plinth-core/               # Layer 1: state machine, metrics, beacon, FFI
 ├── packages/
@@ -133,10 +133,10 @@ wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js
 # JS packages (from repo root or package dir)
 pnpm install
 pnpm -r test                               # run all web tests
-pnpm --filter @plinth/js test              # run one package's tests
+pnpm --filter @wirevice/plinth-js test              # run one package's tests
 
 # Web demo server
-pnpm --filter @plinth/dev start            # serves at http://localhost:3000
+pnpm --filter @wirevice/plinth-dev start            # serves at http://localhost:3000
                                            # Shaka demo at http://localhost:3000/shaka
 
 # Swift (from packages/apple/plinth-apple/)

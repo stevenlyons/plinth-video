@@ -1,6 +1,6 @@
 # Quick-start: Media3 / ExoPlayer Integration
 
-Integrate plinth-video into an Android Media3 app in three steps.
+Integrate plinth-telemetry into an Android Media3 app in three steps.
 
 ## Prerequisites
 

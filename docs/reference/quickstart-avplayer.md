@@ -1,6 +1,6 @@
 # Quick-start: AVPlayer Integration
 
-Integrate plinth-video into an AVPlayer app in three steps.
+Integrate plinth-telemetry into an AVPlayer app in three steps.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Add the package via Swift Package Manager. In Xcode: **File → Add Package Depe
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/your-org/plinth-video", from: "0.1.0")
+.package(url: "https://github.com/your-org/plinth-telemetry", from: "0.1.0")
 ```
 
 Then add `PlinthAVPlayer` to your target's dependencies:

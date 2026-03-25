@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "plinth-video"
+rootProject.name = "plinth-telemetry"
 
 include(":plinth-android")
 project(":plinth-android").projectDir = file("packages/android/plinth-android")

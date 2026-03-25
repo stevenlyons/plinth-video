@@ -1,6 +1,6 @@
 # Quick-start: Shaka Player Integration
 
-Integrate plinth-video into a Shaka Player app in three steps.
+Integrate plinth-telemetry into a Shaka Player app in three steps.
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ bun add shaka-player
 ## 2. Wire up
 
 ```typescript
-import { PlinthShaka } from "@plinth/shaka";
+import { PlinthShaka } from "@wirevice/plinth-shaka";
 
 const video = document.getElementById("video") as HTMLVideoElement;
 
@@ -72,7 +72,7 @@ const plinth = await PlinthShaka.initialize(player, video, videoMeta, {
 For unit tests, inject a `sessionFactory` to bypass real Wasm loading and HTTP:
 
 ```typescript
-import { PlinthSession } from "@plinth/js";
+import { PlinthSession } from "@wirevice/plinth-js";
 
 const plinth = await PlinthShaka.initialize(player, video, videoMeta, {
   sessionFactory: async (meta, config) => {

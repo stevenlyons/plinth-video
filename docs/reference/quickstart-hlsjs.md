@@ -1,6 +1,6 @@
 # Quick-start: Hls.js Integration
 
-Integrate plinth-video into a Hls.js player in three steps.
+Integrate plinth-telemetry into a Hls.js player in three steps.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ bun add hls.js
 
 ```typescript
 import Hls from "hls.js";
-import { PlinthHlsJs } from "@plinth/hlsjs";
+import { PlinthHlsJs } from "@wirevice/plinth-hlsjs";
 
 const video = document.getElementById("video") as HTMLVideoElement;
 const hls = new Hls();
@@ -63,7 +63,7 @@ const plinth = await PlinthHlsJs.initialize(hls, video, videoMeta, {
 For unit tests, inject a `sessionFactory` to bypass real Wasm loading and HTTP:
 
 ```typescript
-import { PlinthSession } from "@plinth/js";
+import { PlinthSession } from "@wirevice/plinth-js";
 
 const plinth = await PlinthHlsJs.initialize(hls, video, videoMeta, {
   sessionFactory: async (meta, config) => {

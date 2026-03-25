@@ -87,7 +87,7 @@ internal data class QualityDto(
 // ── PlinthMedia3 ──────────────────────────────────────────────────────────────
 
 /**
- * Layer-3 Media3 integration for plinth-video.
+ * Layer-3 Media3 integration for plinth-telemetry.
  *
  * Maps [Player.Listener] callbacks to [PlinthSession] events.
  *

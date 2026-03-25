@@ -1,6 +1,6 @@
-import { PlinthDashjs } from "@plinth/dashjs";
-import { PlinthSession } from "@plinth/js";
-import type { PlinthConfig, PlayerEvent, SessionMeta } from "@plinth/js";
+import { PlinthDashjs } from "@wirevice/plinth-dashjs";
+import { PlinthSession } from "@wirevice/plinth-js";
+import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 import { MediaPlayer } from "dashjs";
 
 function log(msg: string) {

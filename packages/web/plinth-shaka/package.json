@@ -1,5 +1,5 @@
 {
-  "name": "@plinth/shaka",
+  "name": "@wirevice/plinth-shaka",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,7 +7,7 @@
     "test": "node --test --import tsx/esm tests/*.test.ts"
   },
   "dependencies": {
-    "@plinth/js": "workspace:*"
+    "@wirevice/plinth-js": "workspace:*"
   },
   "peerDependencies": {
     "shaka-player": "^4.0.0"
