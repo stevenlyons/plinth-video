@@ -127,8 +127,9 @@ cargo build -p plinth-core
 cargo test -p plinth-core
 cargo test -p plinth-core -- <test_name>   # run single test
 
-# Rust core — Wasm
-wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js/wasm
+# Rust core — Wasm (must run from crate dir; --out-dir is relative to crate)
+# PATH prefix ensures rustup's rustc is used, not Homebrew's (which lacks wasm32 target)
+cd crates/plinth-core && PATH="$HOME/.cargo/bin:$PATH" wasm-pack build --target web --out-dir ../../packages/web/plinth-js/wasm
 
 # JS packages (from repo root or package dir)
 pnpm install

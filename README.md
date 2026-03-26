@@ -44,8 +44,9 @@ cargo build -p plinth-core
 gradle wrapper
 
 # Build the Wasm target (required before running JS tests against real Wasm)
-# Prefix PATH if Homebrew Rust is also installed — wasm-pack requires rustup's toolchain
-PATH="$HOME/.cargo/bin:$PATH" wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js/wasm
+# Must run from the crate dir; --out-dir is relative to it.
+# PATH prefix ensures rustup's rustc is used, not Homebrew's (which lacks the wasm32 target).
+cd crates/plinth-core && PATH="$HOME/.cargo/bin:$PATH" wasm-pack build --target web --out-dir ../../packages/web/plinth-js/wasm && cd ../..
 ```
 
 ## Running Tests
@@ -112,7 +113,7 @@ cargo build -p plinth-core --release
 If you have Homebrew Rust installed alongside rustup, prefix the command to ensure rustup's toolchain is used (Homebrew Rust does not include the `wasm32-unknown-unknown` target):
 
 ```bash
-PATH="$HOME/.cargo/bin:$PATH" wasm-pack build crates/plinth-core --target web --out-dir packages/web/plinth-js/wasm
+cd crates/plinth-core && PATH="$HOME/.cargo/bin:$PATH" wasm-pack build --target web --out-dir ../../packages/web/plinth-js/wasm && cd ../..
 ```
 
 ### Apple XCFramework (iOS + macOS)
