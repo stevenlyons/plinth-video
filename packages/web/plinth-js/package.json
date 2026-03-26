@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/stevenlyons/plinth-telemetry/",
+    "url": "git+https://github.com/stevenlyons/plinth-telemetry.git",
     "directory": "packages/web/plinth-js"
   },
   "keywords": [
@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:wasm": "wasm-pack build ../../../crates/plinth-core --target web --out-dir ./wasm",
+    "build:wasm": "cd ../../../crates/plinth-core && PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build --target web --out-dir ../../packages/web/plinth-js/wasm",
     "test": "node --test --import tsx/esm tests/*.test.ts"
   },
   "devDependencies": {
