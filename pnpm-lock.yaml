@@ -14,7 +14,7 @@ importers:
 
   packages/web/plinth-dashjs:
     dependencies:
-      '@plinth/js':
+      '@wirevice/plinth-js':
         specifier: workspace:*
         version: link:../plinth-js
     devDependencies:
@@ -30,7 +30,7 @@ importers:
 
   packages/web/plinth-hlsjs:
     dependencies:
-      '@plinth/js':
+      '@wirevice/plinth-js':
         specifier: workspace:*
         version: link:../plinth-js
     devDependencies:
@@ -55,7 +55,7 @@ importers:
 
   packages/web/plinth-shaka:
     dependencies:
-      '@plinth/js':
+      '@wirevice/plinth-js':
         specifier: workspace:*
         version: link:../plinth-js
     devDependencies:
@@ -71,16 +71,16 @@ importers:
 
   samples/web:
     dependencies:
-      '@plinth/dashjs':
+      '@wirevice/plinth-dashjs':
         specifier: workspace:*
         version: link:../../packages/web/plinth-dashjs
-      '@plinth/hlsjs':
+      '@wirevice/plinth-hlsjs':
         specifier: workspace:*
         version: link:../../packages/web/plinth-hlsjs
-      '@plinth/js':
+      '@wirevice/plinth-js':
         specifier: workspace:*
         version: link:../../packages/web/plinth-js
-      '@plinth/shaka':
+      '@wirevice/plinth-shaka':
         specifier: workspace:*
         version: link:../../packages/web/plinth-shaka
       dashjs:
