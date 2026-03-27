@@ -129,3 +129,61 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 build -p plinth-core --release
 ```
 
 Output `.so` files land in `packages/android/plinth-android/src/main/jniLibs/`.
+
+## Publishing Web Packages to npm
+
+The web packages are scoped under `@wirevice/` and published as private npm packages.
+
+**Prerequisites:** logged in to npm (`npm login`) with access to the `@wirevice` org.
+
+### 1. Build the Wasm target
+
+The `wasm/` directory is not committed — it must be built before packaging.
+
+```bash
+cd crates/plinth-core && PATH="$HOME/.cargo/bin:$PATH" wasm-pack build --target web --out-dir ../../packages/web/plinth-js/wasm && cd ../..
+```
+
+### 2. Compile TypeScript
+
+```bash
+pnpm install
+pnpm -r run build
+```
+
+### 3. Bump versions
+
+All web packages are versioned together. Bump each one to the same version:
+
+```bash
+cd packages/web/plinth-js    && pnpm version <patch|minor|major> --no-git-tag-version && cd ../../..
+cd packages/web/plinth-hlsjs && pnpm version <patch|minor|major> --no-git-tag-version && cd ../../..
+cd packages/web/plinth-shaka && pnpm version <patch|minor|major> --no-git-tag-version && cd ../../..
+cd packages/web/plinth-dashjs && pnpm version <patch|minor|major> --no-git-tag-version && cd ../../..
+```
+
+`--no-git-tag-version` skips the automatic commit and tag — commit the version bumps manually as part of your release commit.
+
+### 4. Verify package contents (dry run)
+
+```bash
+cd packages/web/plinth-js    && npm pack --dry-run && cd ../../..
+cd packages/web/plinth-hlsjs && npm pack --dry-run && cd ../../..
+cd packages/web/plinth-shaka && npm pack --dry-run && cd ../../..
+cd packages/web/plinth-dashjs && npm pack --dry-run && cd ../../..
+```
+
+Each tarball should contain `dist/` (and `wasm/` for `plinth-js`) and nothing else unexpected.
+
+### 5. Publish
+
+Use `pnpm publish` — **not** `npm publish`. pnpm replaces the `workspace:*` dependency protocol with the real version number in the tarball. Using `npm publish` directly will leave `workspace:*` in the published `package.json`, breaking dependency resolution for consumers.
+
+Publish `plinth-js` first since the others depend on it:
+
+```bash
+cd packages/web/plinth-js    && pnpm publish --no-git-checks && cd ../../..
+cd packages/web/plinth-hlsjs && pnpm publish --no-git-checks && cd ../../..
+cd packages/web/plinth-shaka && pnpm publish --no-git-checks && cd ../../..
+cd packages/web/plinth-dashjs && pnpm publish --no-git-checks && cd ../../..
+```
