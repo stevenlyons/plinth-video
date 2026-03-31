@@ -83,6 +83,17 @@ impl Session {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    /// Transition to Error, increment error_count, and return an error beacon.
+    /// Callers must stop any running trackers *before* calling this.
+    fn emit_error(&mut self, code: String, message: Option<String>, fatal: bool, now_ms: u64) -> Beacon {
+        self.state = PlayerState::Error;
+        self.error_count += 1;
+        let m = self.snapshot_metrics(now_ms);
+        let mut b = self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
+        b.error = Some(PlayerError { code, message, fatal });
+        b
+    }
+
     fn snapshot_metrics(&self, now_ms: u64) -> Metrics {
         Metrics {
             vst_ms: self.vst_ms,
@@ -165,13 +176,7 @@ impl Session {
             }
 
             (PlayerState::Loading, PlayerEvent::Error { code, message, fatal }) => {
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // Also handle load(newSrc) from Ended → Loading
@@ -241,13 +246,7 @@ impl Session {
 
             (PlayerState::PlayAttempt, PlayerEvent::Error { code, message, fatal }) => {
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // ── Buffering transitions ─────────────────────────────────────────
@@ -271,13 +270,7 @@ impl Session {
 
             (PlayerState::Buffering, PlayerEvent::Error { code, message, fatal }) => {
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // ── Playing transitions ───────────────────────────────────────────
@@ -340,13 +333,7 @@ impl Session {
             (PlayerState::Playing, PlayerEvent::Error { code, message, fatal }) => {
                 self.played_tracker.stop(now_ms);
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             (PlayerState::Playing, PlayerEvent::QualityChange { quality }) => {
@@ -441,13 +428,7 @@ impl Session {
                 self.pre_seek_state = None;
                 self.seek_from_ms = None;
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // ── Rebuffering transitions ───────────────────────────────────────
@@ -515,13 +496,7 @@ impl Session {
             (PlayerState::Rebuffering, PlayerEvent::Error { code, message, fatal }) => {
                 self.rebuffer_tracker.stop(now_ms);
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // ── Terminal / reset transitions ───────────────────────────────────
@@ -538,45 +513,15 @@ impl Session {
             }
 
             // ── Error from pre-session states ─────────────────────────────────
-            (PlayerState::Idle, PlayerEvent::Error { code, message, fatal }) => {
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
-            }
-
-            (PlayerState::Ready, PlayerEvent::Error { code, message, fatal }) => {
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+            (PlayerState::Idle, PlayerEvent::Error { code, message, fatal })
+            | (PlayerState::Ready, PlayerEvent::Error { code, message, fatal })
+            | (PlayerState::Ended, PlayerEvent::Error { code, message, fatal }) => {
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             (PlayerState::Paused, PlayerEvent::Error { code, message, fatal }) => {
                 self.watch_tracker.stop(now_ms);
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
-            }
-
-            (PlayerState::Ended, PlayerEvent::Error { code, message, fatal }) => {
-                self.state = PlayerState::Error;
-                self.error_count += 1;
-                let m = self.snapshot_metrics(now_ms);
-                let mut b =
-                    self.make_beacon(BeaconEvent::Error, Some(PlayerState::Error), Some(m), now_ms);
-                b.error = Some(PlayerError { code, message, fatal });
-                out.push(b);
+                out.push(self.emit_error(code, message, fatal, now_ms));
             }
 
             // Ignore all other (state, event) combinations (invalid transitions).
