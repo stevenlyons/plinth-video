@@ -28,8 +28,8 @@
 </head>
 <body>
   <header>
-    <h1>plinth-telemetry</h1>
-    <input id="url-input" type="text" value="https://stream.mux.com/GWPDeDbc011cmHckB4h4l87OofuZPGPKl.m3u8" spellcheck="false" />
+    <h1 id="player-label">plinth-telemetry</h1>
+    <input id="url-input" type="text" spellcheck="false" />
     <button id="load-btn">Load</button>
   </header>
   <main>
@@ -46,13 +46,21 @@
       <ul id="log"></ul>
     </div>
   </main>
-  <script type="importmap">
-  {
-    "imports": {
-      "hls.js": "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.mjs"
-    }
-  }
+  <script>
+    const players = {
+      hlsjs:  { label: 'plinth-telemetry — HLS.js',  url: 'https://stream.mux.com/GWPDeDbc011cmHckB4h4l87OofuZPGPKl.m3u8' },
+      shaka:  { label: 'plinth-telemetry — Shaka',   url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd' },
+      dashjs: { label: 'plinth-telemetry — dash.js', url: 'https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd' },
+    };
+    const key = location.pathname.slice(1);
+    const cfg = players[key] || players.hlsjs;
+    document.title = cfg.label;
+    document.getElementById('player-label').textContent = cfg.label;
+    document.getElementById('url-input').value = cfg.url;
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = './' + key + '-main.js';
+    document.head.appendChild(s);
   </script>
-  <script type="module" src="./hlsjs-main.js"></script>
 </body>
 </html>

@@ -9,7 +9,6 @@ const [hlsBuildResult, shakaBuildResult, dashjsBuildResult] = await Promise.all(
     outdir: distDir,
     target: "browser",
     minify: true,
-    external: ["hls.js"],
   }),
   Bun.build({
     entrypoints: [join(import.meta.dir, "shaka-main.ts")],
@@ -90,25 +89,9 @@ Bun.serve({
       });
     }
 
-    // Serve index.html for /hlsjs
-    if (req.method === "GET" && url.pathname === "/hlsjs") {
-      const file = Bun.file(join(import.meta.dir, "hlsjs.html"));
-      return new Response(file, {
-        headers: { "Content-Type": "text/html", ...CORS_HEADERS },
-      });
-    }
-
-    // Serve shaka.html for /shaka
-    if (req.method === "GET" && url.pathname === "/shaka") {
-      const file = Bun.file(join(import.meta.dir, "shaka.html"));
-      return new Response(file, {
-        headers: { "Content-Type": "text/html", ...CORS_HEADERS },
-      });
-    }
-
-    // Serve dashjs.html for /dashjs
-    if (req.method === "GET" && url.pathname === "/dashjs") {
-      const file = Bun.file(join(import.meta.dir, "dashjs.html"));
+    // Serve demo.html for all player routes
+    if (req.method === "GET" && ["/hlsjs", "/shaka", "/dashjs"].includes(url.pathname)) {
+      const file = Bun.file(join(import.meta.dir, "demo.html"));
       return new Response(file, {
         headers: { "Content-Type": "text/html", ...CORS_HEADERS },
       });
