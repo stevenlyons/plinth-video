@@ -34,6 +34,18 @@ export function setupDemo(loader: Loader): void {
     document.getElementById("log")!.innerHTML = "";
   });
 
+  document.getElementById("copy-log")!.addEventListener("click", () => {
+    const items = document.getElementById("log")!.querySelectorAll("li");
+    const text = Array.from(items)
+      .map((li) => {
+        const ts = li.querySelector(".ts")?.textContent ?? "";
+        const msg = li.querySelector(".msg")?.textContent ?? "";
+        return ts + msg;
+      })
+      .join("\n");
+    navigator.clipboard.writeText(text);
+  });
+
   document.getElementById("url-input")!.addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("load-btn")!.click();
   });
