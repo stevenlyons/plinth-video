@@ -61,6 +61,8 @@ export function setupDemo(loader: Loader): void {
     try {
       teardown = await loader(url, video, loggingSessionFactory);
       log("Session started");
+      const autostart = (document.getElementById("autostart") as HTMLInputElement).checked;
+      if (autostart) video.play();
     } catch (err) {
       log(`ERROR: ${err}`);
     }
