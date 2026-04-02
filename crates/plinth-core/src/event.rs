@@ -11,12 +11,16 @@ pub enum PlayerEvent {
     CanPlay,
     /// play() called by user: Ready/Paused/Ended → PlayAttempt.
     Play,
-    /// Buffer empty / stall: PlayAttempt → Buffering, Playing → Rebuffering.
+    /// Buffer empty at initial play: PlayAttempt → Buffering.
     Waiting,
-    /// First decoded frame rendered (initial play only): PlayAttempt/Buffering → Playing.
+    /// Buffer exhausted mid-playback (stall): Playing → Rebuffering.
+    Stall,
+    /// First decoded frame rendered (once per session): PlayAttempt/Buffering → Playing.
     FirstFrame,
-    /// Buffer sufficiently full to resume: Buffering/Rebuffering → Playing.
-    CanPlayThrough,
+    /// Media `playing` event — fires on any resume (rebuffer recovery or resume from pause).
+    /// PlayAttempt/Buffering → Playing (no first_frame beacon if vst already set);
+    /// Rebuffering → Playing (emits rebuffer_end beacon).
+    Playing,
     /// User or system paused: Playing/Rebuffering → Paused.
     Pause,
     /// Seek initiated. `from_ms` is the playhead position before the seek.
@@ -99,8 +103,9 @@ impl<'a> miniserde::de::Map for PlayerEventMap<'a> {
             "can_play" => PlayerEvent::CanPlay,
             "play" => PlayerEvent::Play,
             "waiting" => PlayerEvent::Waiting,
+            "stall" => PlayerEvent::Stall,
             "first_frame" => PlayerEvent::FirstFrame,
-            "can_play_through" => PlayerEvent::CanPlayThrough,
+            "playing" => PlayerEvent::Playing,
             "pause" => PlayerEvent::Pause,
             "seek_start" => PlayerEvent::SeekStart {
                 from_ms: self.from_ms.take().ok_or(miniserde::Error)?,

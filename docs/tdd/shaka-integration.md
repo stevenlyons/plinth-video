@@ -192,10 +192,11 @@ Listeners are stored in `shakaHandlers` as `EventListener` functions added via `
 
 | Shaka event | Trigger condition | Core `PlayerEvent` emitted |
 |---|---|---|
-| `loading` | `player.load(url)` called | `{ type: "load", src: player.getAssetUri() }` |
+| `loading` | `player.load(url)` called | `{ type: "load", src: player.getAssetUri() }`; resets `hasFiredFirstFrame = false` |
 | `loaded` | Manifest parsed, content ready | `{ type: "can_play" }` |
-| `buffering` | `(e as any).buffering === true` | `{ type: "waiting" }` |
-| `buffering` | `(e as any).buffering === false` | `{ type: "can_play_through" }` |
+| `buffering` | `(e as any).buffering === true` AND `!hasFiredFirstFrame` | `{ type: "waiting" }` — initial buffer stall |
+| `buffering` | `(e as any).buffering === true` AND `hasFiredFirstFrame` | `{ type: "stall" }` — mid-playback stall |
+| `buffering` | `(e as any).buffering === false` | `{ type: "playing" }` — buffer recovered |
 | `adaptation` | ABR switched variant | `{ type: "quality_change", quality: { ... } }` |
 | `error` | Shaka error | `{ type: "error", code, message, fatal }` |
 | `unloading` | Shaka tearing down | `this.destroy()` |
@@ -207,9 +208,9 @@ Listeners are stored in `shakaHandlers` as `EventListener` functions added via `
 ```typescript
 const onBuffering: EventListener = (e) => {
   if ((e as any).buffering) {
-    this.emit({ type: "waiting" });
+    this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
   } else {
-    this.emit({ type: "can_play_through" });
+    this.emit({ type: "playing" });
   }
 };
 player.addEventListener("buffering", onBuffering);
@@ -223,8 +224,8 @@ Listeners are stored in `videoHandlers` and added via `video.addEventListener`.
 | `<video>` event | Action |
 |---|---|
 | `play` | `emit({ type: "play" })` |
-| `playing` | If `!hasFiredFirstFrame`: set flag, `emit({ type: "first_frame" })`; else no-op |
-| `pause` | `emit({ type: "pause" })` |
+| `playing` | If `!hasFiredFirstFrame`: set flag, `emit({ type: "first_frame" })`; else no-op (recovery handled by Shaka `buffering(false)`) |
+| `pause` | If `video.ended`: no-op (suppress spurious pause on natural end); else `emit({ type: "pause" })` |
 | `seeking` | `emit({ type: "seek_start", from_ms: lastPlayheadMs })` |
 | `seeked` | `emit({ type: "seek_end", to_ms: video.currentTime * 1000, buffer_ready: isBufferReady(video) })` |
 | `ended` | `emit({ type: "ended" })` |
@@ -233,11 +234,12 @@ Listeners are stored in `videoHandlers` and added via `video.addEventListener`.
 
 ### `hasFiredFirstFrame` Flag
 
-The `playing` video event fires on initial playback start, on every resume from pause, and on every rebuffer recovery. The flag ensures `first_frame` is sent exactly once per load:
+The `hasFiredFirstFrame` flag distinguishes initial buffering from mid-playback stalls and ensures `first_frame` is sent exactly once per load:
 
 - Reset to `false` in the `loading` Shaka event handler.
-- Set to `true` and emit `first_frame` on the first `playing` event after `loading`.
-- All subsequent `playing` events are no-ops.
+- Set to `true` and emit `first_frame` on the first `<video> playing` event after `loading`.
+- All subsequent `<video> playing` events are no-ops.
+- The `buffering` event checks this flag: `false` → `waiting`; `true` → `stall`.
 
 ```typescript
 const onPlaying: EventListener = () => {
@@ -485,8 +487,9 @@ Tests are in `tests/shaka.test.ts`. Each test is independent with `beforeEach` /
 |---|---|---|---|
 | 1 | `loading` → `load` with URI from `getAssetUri()` | `player.fireLoading()` | `processEvent({ type:"load", src:"https://example.com/manifest.mpd" })` |
 | 2 | `loaded` → `can_play` | `player.fireLoaded()` | `processEvent({ type:"can_play" })` |
-| 3 | `buffering(true)` → `waiting` | `player.fireBuffering(true)` | `processEvent({ type:"waiting" })` |
-| 4 | `buffering(false)` → `can_play_through` | `player.fireBuffering(false)` | `processEvent({ type:"can_play_through" })` |
+| 3 | `buffering(true)` before first frame → `waiting` | `player.fireBuffering(true)` (no prior `playing`) | `processEvent({ type:"waiting" })` |
+| 3b | `buffering(true)` after first frame → `stall` | `video.fire("playing")`, then `player.fireBuffering(true)` | `processEvent({ type:"stall" })` |
+| 4 | `buffering(false)` → `playing` | `player.fireBuffering(false)` | `processEvent({ type:"playing" })` |
 | 5 | `playing` (first) → `first_frame` | `video.fire("playing")` | `processEvent({ type:"first_frame" })` called once |
 | 6 | `playing` (subsequent) → no-op | `video.fire("playing")` twice | `processEvent` called once total |
 | 7 | `hasFiredFirstFrame` resets on `loading` | `playing` → `loading` → `playing` | second `first_frame` emitted after reset |
@@ -514,7 +517,7 @@ Tests are in `tests/shaka.test.ts`. Each test is independent with `beforeEach` /
 | Manifest load event | Hls.js `MANIFEST_LOADING` on Hls instance | Shaka `loading` on player |
 | Manifest ready event | Hls.js `MANIFEST_PARSED` on Hls instance | Shaka `loaded` on player |
 | Buffer stall | `<video>` `waiting` event | Shaka `buffering` (`event.buffering === true`) |
-| Buffer recovery | `<video>` `canplaythrough` event | Shaka `buffering` (`event.buffering === false`) |
+| Buffer recovery | `<video>` `playing` event (first_frame) | Shaka `buffering` (`event.buffering === false`) |
 | Quality change | `LEVEL_SWITCHED` + `hls.levels[n]` | Shaka `adaptation` + `player.getVariantTracks()` |
 | Error severity | `data.fatal === true` only | `detail.severity === 2` (fatal) or `=== 1` (non-fatal) |
 | Auto-cleanup trigger | `DESTROYING` event | `unloading` event |

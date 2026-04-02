@@ -74,19 +74,20 @@ const plinth = await PlinthHlsJs.initialize(hls, video, videoMeta, {
 
 ## Events mapped
 
-| Hls.js / video event     | Core `PlayerEvent`                          |
-|--------------------------|---------------------------------------------|
-| `MANIFEST_LOADING`       | `load`                                      |
-| `MANIFEST_PARSED`        | `can_play`                                  |
-| `LEVEL_SWITCHED`         | `quality_change`                            |
-| `ERROR` (fatal only)     | `error`                                     |
-| `DESTROYING`             | triggers `destroy()`                        |
-| `<video> play`           | `play`                                      |
-| `<video> playing`        | `first_frame`                               |
-| `<video> waiting`        | `waiting` (rebuffer start / initial buffer) |
-| `<video> pause`          | `pause`                                     |
-| `<video> seeking`        | `seek_start`                                |
-| `<video> seeked`         | `seek_end`                                  |
-| `<video> ended`          | `ended`                                     |
-| `<video> canplaythrough` | `can_play_through`                          |
-| `<video> timeupdate`     | updates playhead (heartbeat data)           |
+| Hls.js / video event          | Core `PlayerEvent`                                    |
+|-------------------------------|-------------------------------------------------------|
+| `MANIFEST_LOADING`            | `load`                                                |
+| `MANIFEST_PARSED`             | `can_play`                                            |
+| `LEVEL_SWITCHED`              | `quality_change`                                      |
+| `ERROR` (fatal only)          | `error`                                               |
+| `DESTROYING`                  | triggers `destroy()`                                  |
+| `<video> play`                | `play`                                                |
+| `<video> playing` (first)     | `first_frame` — sets `hasFiredFirstFrame`             |
+| `<video> playing` (subsequent)| `playing` — rebuffer recovery / resume from pause     |
+| `<video> waiting` (before first frame) | `waiting` — initial buffer stall (PlayAttempt → Buffering) |
+| `<video> waiting` (after first frame)  | `stall` — mid-playback buffer stall (Playing → Rebuffering) |
+| `<video> pause`               | `pause` — suppressed when `video.ended` is true       |
+| `<video> seeking`             | `seek_start`                                          |
+| `<video> seeked`              | `seek_end`                                            |
+| `<video> ended`               | `ended`                                               |
+| `<video> timeupdate`          | updates playhead (heartbeat data)                     |

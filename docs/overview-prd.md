@@ -117,16 +117,16 @@ stateDiagram-v2
     Ready     --> Idle        : destroy()
 
     PlayAttempt --> Buffering : waiting (buffer empty)
-    PlayAttempt --> Playing   : firstFrame
+    PlayAttempt --> Playing   : firstFrame event / playing
     PlayAttempt --> Error     : error event
 
-    Buffering   --> Playing   : firstFrame / canPlayThrough
+    Buffering   --> Playing   : firstFrame event / playing
     Buffering   --> Error     : error event
 
     %% ── Active Playback ──────────────────────────────────────────────────────
     Playing --> Paused        : pause()
     Playing --> Seeking       : seekStart
-    Playing --> Rebuffering   : waiting (buffer stall)
+    Playing --> Rebuffering   : stall (buffer stall)
     Playing --> Ended         : ended event
     Playing --> Error         : error event
 
@@ -143,7 +143,7 @@ stateDiagram-v2
     Seeking --> Error         : error event
 
     %% ── Rebuffering ──────────────────────────────────────────────────────────
-    Rebuffering --> Playing   : canPlayThrough / playing event
+    Rebuffering --> Playing   : playing event
     Rebuffering --> Paused    : pause()
     Rebuffering --> Seeking   : seekStart
     Rebuffering --> Error     : error event

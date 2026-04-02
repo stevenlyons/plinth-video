@@ -41,7 +41,7 @@ Inside `destroy`:
 Work through the player's event API and map each to the corresponding core event. The required path for a successful play session is:
 
 ```
-load  →  can_play  →  play  →  [waiting]  →  first_frame  →  playing  →  ended
+load  →  can_play  →  play  →  [waiting]  →  first_frame  →  [stall / playing ...]  →  ended
 ```
 
 | Core event | When to emit |
@@ -49,10 +49,11 @@ load  →  can_play  →  play  →  [waiting]  →  first_frame  →  playing  
 | `load` | Player begins loading a new source (URL / manifest URL). |
 | `can_play` | Player has parsed enough to start playback (manifest ready, `readyState ≥ 2`). |
 | `play` | User initiates playback (or resumes after pause). |
-| `first_frame` | First frame renders — the player is actually outputting video. |
-| `can_play_through` | Buffer recovered after stall; player resumes output. |
-| `waiting` | Player stalls waiting for data (rebuffer, initial buffer). |
-| `pause` | Playback paused by user or programmatically. |
+| `waiting` | Buffer empty **before** first frame (PlayAttempt → Buffering). Emitted only once per load, before `first_frame` fires. |
+| `first_frame` | First decoded frame rendered — emitted **once per load**. Use a `hasFiredFirstFrame` flag and reset it on each new `load`. |
+| `stall` | Buffer exhausted **after** first frame (Playing → Rebuffering). Use the same `hasFiredFirstFrame` flag to distinguish from `waiting`. |
+| `playing` | Rebuffer recovery or resume from pause (Rebuffering/Paused → Playing). Do not re-emit `first_frame` here. |
+| `pause` | Playback paused by user or programmatically. **Suppress if the video has ended naturally** (check `video.ended` or equivalent). |
 | `seek_start` | Seek begins. Pass `from_ms` (last known playhead position). |
 | `seek_end` | Seek complete. Pass `to_ms` and `buffer_ready`. |
 | `quality_change` | ABR rendition switch. |

@@ -7,8 +7,9 @@ public enum PlayerEvent: Encodable {
     case canPlay
     case play
     case waiting
+    case stall
     case firstFrame
-    case canPlayThrough
+    case playing
     case pause
     case seekStart(fromMs: UInt64)
     case seekEnd(toMs: UInt64, bufferReady: Bool)
@@ -38,10 +39,12 @@ public enum PlayerEvent: Encodable {
             try container.encode("play", forKey: .type)
         case .waiting:
             try container.encode("waiting", forKey: .type)
+        case .stall:
+            try container.encode("stall", forKey: .type)
         case .firstFrame:
             try container.encode("first_frame", forKey: .type)
-        case .canPlayThrough:
-            try container.encode("can_play_through", forKey: .type)
+        case .playing:
+            try container.encode("playing", forKey: .type)
         case .pause:
             try container.encode("pause", forKey: .type)
         case .seekStart(let fromMs):

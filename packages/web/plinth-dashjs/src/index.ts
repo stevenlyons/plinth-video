@@ -135,13 +135,13 @@ export class PlinthDashjs {
     this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
 
     const onPlaybackStalled = () => {
-      this.emit({ type: "waiting" });
+      this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
     };
     this.player.on(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
     this.playerHandlers.set(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
 
     const onBufferLoaded = () => {
-      this.emit({ type: "can_play_through" });
+      this.emit({ type: "playing" });
     };
     this.player.on(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
     this.playerHandlers.set(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
@@ -193,7 +193,10 @@ export class PlinthDashjs {
     this.video.addEventListener("play", onPlay);
     this.videoHandlers.set("play", onPlay);
 
-    const onPause: EventListener = () => this.emit({ type: "pause" });
+    const onPause: EventListener = () => {
+      if (this.video.ended) return;
+      this.emit({ type: "pause" });
+    };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 

@@ -351,13 +351,14 @@ dependencies {
 
 | Media3 callback / condition | Plinth event | Notes |
 |---|---|---|
-| `onMediaItemTransition` | `load` | src = `mediaItem.localConfiguration?.uri?.toString()` |
-| `onPlaybackStateChanged(STATE_BUFFERING)` + `!isPlaying` | `waiting` | After play intent but before first frame |
+| `onMediaItemTransition` | `load` | src = `mediaItem.localConfiguration?.uri?.toString()`; resets `hasFiredFirstFrame` |
+| `onPlaybackStateChanged(STATE_BUFFERING)` + `!hasFiredFirstFrame` | `waiting` | Initial buffer stall before first frame (PlayAttempt → Buffering) |
+| `onPlaybackStateChanged(STATE_BUFFERING)` + `hasFiredFirstFrame` | `stall` | Mid-playback stall (Playing → Rebuffering) |
 | `onPlaybackStateChanged(STATE_READY)` + not yet first frame | `can_play` | Item loaded and ready |
-| `onRenderedFirstFrame` | `first_frame` | Fires once per content item |
-| `onIsPlayingChanged(true)` + `hasFiredFirstFrame` | `can_play_through` | Resume from pause/rebuffer recovery |
+| `onRenderedFirstFrame` | `first_frame` | Fires once per content item; sets `hasFiredFirstFrame` |
+| `onIsPlayingChanged(true)` + `hasFiredFirstFrame` | `playing` | Rebuffer recovery / resume from pause |
 | `onIsPlayingChanged(true)` + `!hasFiredFirstFrame` | `play` | Initial play attempt |
-| `onIsPlayingChanged(false)` + not ended | `pause` | Rate dropped to 0 by user |
+| `onIsPlayingChanged(false)` + not ended + not mid-play stall | `pause` | Suppressed during natural end (`isEndingNaturally`) and during buffer stall |
 | `onPlaybackStateChanged(STATE_ENDED)` | `ended` | Natural end |
 | `onPlayerError(PlaybackException)` | `error` | `fatal = true` for all Media3 errors |
 | `seekTo()` wrapper | `seek_start` then `seek_end` | Programmatic seeks via `PlinthMedia3.seekTo()` |
@@ -463,7 +464,7 @@ class PlinthMedia3 private constructor(private val player: Player) : Player.List
     internal fun handlePlay() = sendEvent("""{"type":"play"}""")
     internal fun handleWaiting() = sendEvent("""{"type":"waiting"}""")
     internal fun handleFirstFrame() { hasFiredFirstFrame = true; sendEvent("""{"type":"first_frame"}""") }
-    internal fun handleCanPlayThrough() = sendEvent("""{"type":"can_play_through"}""")
+    internal fun handleRebufferRecovery() = sendEvent("""{"type":"first_frame"}""")
     internal fun handlePause() = sendEvent("""{"type":"pause"}""")
     internal fun handleEnded() { isEndingNaturally = true; sendEvent("""{"type":"ended"}""") }
     internal fun handleError(code: String, message: String?, fatal: Boolean) {

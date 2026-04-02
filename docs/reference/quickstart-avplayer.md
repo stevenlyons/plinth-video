@@ -107,19 +107,20 @@ See `PlinthAVPlayerTests` for examples of testing event handling by calling the 
 
 ## Events mapped
 
-| AVFoundation source                          | Core `PlayerEvent`                          |
-|----------------------------------------------|---------------------------------------------|
-| `player.currentItem` KVO (item replaced)     | `load`                                      |
-| `AVPlayerItem.status` → `.readyToPlay`       | `can_play`                                  |
-| `player.rate` KVO (0 → >0)                   | `play`                                      |
-| `player.timeControlStatus` → `.playing` (first time) | `first_frame`                      |
-| `player.timeControlStatus` → `.waitingToPlayAtSpecifiedRate` | `waiting`             |
-| `player.timeControlStatus` → `.playing` (subsequent) | `can_play_through`               |
-| `player.rate` KVO (>0 → 0, not near end)     | `pause`                                     |
-| Periodic observer — discontinuous position jump | `seek_start` + `seek_end`               |
-| `plinth.seek(to:)` wrapper                   | `seek_start` + `seek_end` (precise)         |
-| `AVPlayerItemDidPlayToEndTime`               | `ended`                                     |
-| `AVPlayerItemFailedToPlayToEndTime`          | `error` (fatal)                             |
-| `AVPlayerItem.status` → `.failed`            | `error` (fatal)                             |
-| `AVPlayerItemNewAccessLogEntry`              | `quality_change`                            |
-| Periodic observer — each tick                | updates playhead (heartbeat data)           |
+| AVFoundation source                          | Core `PlayerEvent`                                                        |
+|----------------------------------------------|---------------------------------------------------------------------------|
+| `player.currentItem` KVO (item replaced)     | `load`                                                                    |
+| `AVPlayerItem.status` → `.readyToPlay`       | `can_play`                                                                |
+| `player.rate` KVO (0 → >0)                   | `play`                                                                    |
+| `player.timeControlStatus` → `.playing` (first time)     | `first_frame` — sets `hasFiredFirstFrame`          |
+| `player.timeControlStatus` → `.waitingToPlayAtSpecifiedRate` (before first frame) | `waiting` — initial buffer stall |
+| `player.timeControlStatus` → `.waitingToPlayAtSpecifiedRate` (after first frame)  | `stall` — mid-playback stall     |
+| `player.timeControlStatus` → `.playing` (subsequent)     | `playing` — rebuffer recovery / resume from pause  |
+| `player.rate` KVO (>0 → 0, not near end)     | `pause` — suppressed when current time is within 0.5 s of item duration  |
+| Periodic observer — discontinuous position jump | `seek_start` + `seek_end`                                              |
+| `plinth.seek(to:)` wrapper                   | `seek_start` + `seek_end` (precise)                                       |
+| `AVPlayerItemDidPlayToEndTime`               | `ended`                                                                   |
+| `AVPlayerItemFailedToPlayToEndTime`          | `error` (fatal)                                                           |
+| `AVPlayerItem.status` → `.failed`            | `error` (fatal)                                                           |
+| `AVPlayerItemNewAccessLogEntry`              | `quality_change`                                                          |
+| Periodic observer — each tick                | updates playhead (heartbeat data)                                         |

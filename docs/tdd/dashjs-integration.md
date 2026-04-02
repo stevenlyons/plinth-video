@@ -232,8 +232,9 @@ Handlers are stored in `playerHandlers` and added via `player.on(event, handler)
 |---|---|---|
 | `MANIFEST_LOADING_STARTED` | Source attachment begins | `{ type: "load", src: player.getSource() ?? "" }`; also resets `hasFiredFirstFrame = false` |
 | `STREAM_INITIALIZED` | Manifest parsed, stream ready | `{ type: "can_play" }` |
-| `PLAYBACK_STALLED` | Buffer exhausted; playback halted | `{ type: "waiting" }` |
-| `BUFFER_LOADED` | Buffer recovered | `{ type: "can_play_through" }` |
+| `PLAYBACK_STALLED` | Buffer exhausted; `!hasFiredFirstFrame` | `{ type: "waiting" }` — initial buffer stall |
+| `PLAYBACK_STALLED` | Buffer exhausted; `hasFiredFirstFrame` | `{ type: "stall" }` — mid-playback stall |
+| `BUFFER_LOADED` | Buffer recovered | `{ type: "playing" }` — rebuffer recovery / resume |
 | `PLAYBACK_STARTED` | Playback begins or resumes | If `!hasFiredFirstFrame`: set flag, `emit({ type: "first_frame" })`; else no-op |
 | `QUALITY_CHANGE_RENDERED` | ABR switch visible on screen | `{ type: "quality_change", quality: { ... } }` |
 | `ERROR` | Player error | `{ type: "error", code, message, fatal: true }` |
@@ -260,7 +261,7 @@ Listeners are stored in `videoHandlers` and added via `video.addEventListener`.
 | `<video>` event | Action |
 |---|---|
 | `play` | `emit({ type: "play" })` |
-| `pause` | `emit({ type: "pause" })` |
+| `pause` | If `video.ended`: no-op (suppress spurious pause on natural end); else `emit({ type: "pause" })` |
 | `seeking` | `emit({ type: "seek_start", from_ms: lastPlayheadMs })` |
 | `seeked` | `emit({ type: "seek_end", to_ms: video.currentTime * 1000, buffer_ready: isBufferReady(video) })` |
 | `ended` | `emit({ type: "ended" })` |
@@ -479,8 +480,9 @@ async function setup(player: FakePlayer, video: FakeVideo, mockSession: ReturnTy
 |---|---|---|---|
 | 1 | `MANIFEST_LOADING_STARTED` → `load` with URI from `getSource()` | `player.fire('manifestLoadingStarted')` | `processEvent({ type:"load", src:"https://example.com/manifest.mpd" })` |
 | 2 | `STREAM_INITIALIZED` → `can_play` | `player.fire('streamInitialized')` | `processEvent({ type:"can_play" })` |
-| 3 | `PLAYBACK_STALLED` → `waiting` | `player.fire('playbackStalled')` | `processEvent({ type:"waiting" })` |
-| 4 | `BUFFER_LOADED` → `can_play_through` | `player.fire('bufferLoaded')` | `processEvent({ type:"can_play_through" })` |
+| 3 | `PLAYBACK_STALLED` before first frame → `waiting` | `player.fire('playbackStalled')` (no prior `playbackStarted`) | `processEvent({ type:"waiting" })` |
+| 3b | `PLAYBACK_STALLED` after first frame → `stall` | `player.fire('playbackStarted')`, then `player.fire('playbackStalled')` | `processEvent({ type:"stall" })` |
+| 4 | `BUFFER_LOADED` → `playing` | `player.fire('bufferLoaded')` | `processEvent({ type:"playing" })` |
 | 5 | `PLAYBACK_STARTED` (first) → `first_frame` | `player.fire('playbackStarted')` | `processEvent({ type:"first_frame" })` called once |
 | 6 | `PLAYBACK_STARTED` (subsequent) → no-op | `player.fire('playbackStarted')` twice | `processEvent` called once total |
 | 7 | `hasFiredFirstFrame` resets on `MANIFEST_LOADING_STARTED` | `started` → `loading` → `started` | second `first_frame` emitted after reset |
@@ -521,9 +523,10 @@ Unlike Hls.js (externalled, loaded from CDN) and Shaka (UMD global, loaded via `
 | Test fake type | `extends EventTarget` | `extends EventTarget` | Custom `on`/`off`/`fire` emitter |
 | Manifest loading event | `MANIFEST_LOADING` | Shaka `loading` | `MANIFEST_LOADING_STARTED` |
 | Content ready event | `MANIFEST_PARSED` | Shaka `loaded` | `STREAM_INITIALIZED` |
-| Buffer stall | `<video>` `waiting` | Shaka `buffering(true)` | `PLAYBACK_STALLED` |
-| Buffer recovery | `<video>` `canplaythrough` | Shaka `buffering(false)` | `BUFFER_LOADED` |
-| First frame signal | `<video>` `playing` (no guard needed) | `<video>` `playing` (with guard) | `PLAYBACK_STARTED` (with guard) |
+| Buffer stall (initial) | `<video>` `waiting` (before first frame) | Shaka `buffering(true)` (before first frame) | `PLAYBACK_STALLED` (before first frame) |
+| Buffer stall (mid-play) | `<video>` `waiting` (after first frame) → `stall` | Shaka `buffering(true)` (after first frame) → `stall` | `PLAYBACK_STALLED` (after first frame) → `stall` |
+| Buffer recovery | `<video>` `playing` → `playing` event | Shaka `buffering(false)` → `playing` event | `BUFFER_LOADED` → `playing` event |
+| First frame signal | `<video>` `playing` (with guard) | `<video>` `playing` (with guard) | `PLAYBACK_STARTED` (with guard) |
 | Seek position source | `<video>` `seeking`/`seeked` | `<video>` `seeking`/`seeked` | `<video>` `seeking`/`seeked` |
 | Quality change | `LEVEL_SWITCHED` + `hls.levels[n]` | `adaptation` + `getVariantTracks()` | `QUALITY_CHANGE_RENDERED` + `getCurrentRepresentationForType()` |
 | Error severity | `data.fatal === true` | `detail.severity === 2` | All `ERROR` events: `fatal: true` |

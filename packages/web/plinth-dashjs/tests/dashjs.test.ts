@@ -40,6 +40,7 @@ class FakePlayer {
 
 class FakeVideo extends EventTarget {
   currentTime = 0;
+  ended = false;
   buffered = { length: 0, start: (_i: number) => 0, end: (_i: number) => 0 } as unknown as TimeRanges;
   error: { code: number; message?: string } | null = null;
 
@@ -130,19 +131,29 @@ describe("PlinthDashjs", () => {
   });
 
   // 3
-  it("PLAYBACK_STALLED → processEvent({ type:'waiting' })", async () => {
+  it("PLAYBACK_STALLED before first_frame → processEvent({ type:'waiting' })", async () => {
     instance = await setup(player, video, mockSession);
     player.fire("playbackStalled");
 
     assertCalledWith(mockSession.processEvent, { type: "waiting" });
   });
 
+  // 3b
+  it("PLAYBACK_STALLED after first_frame → processEvent({ type:'stall' })", async () => {
+    instance = await setup(player, video, mockSession);
+    player.fire("playbackStarted"); // sets hasFiredFirstFrame
+    mockSession.processEvent.mock.resetCalls();
+    player.fire("playbackStalled");
+
+    assertCalledWith(mockSession.processEvent, { type: "stall" });
+  });
+
   // 4
-  it("BUFFER_LOADED → processEvent({ type:'can_play_through' })", async () => {
+  it("BUFFER_LOADED → processEvent({ type:'playing' })", async () => {
     instance = await setup(player, video, mockSession);
     player.fire("bufferLoaded");
 
-    assertCalledWith(mockSession.processEvent, { type: "can_play_through" });
+    assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
   // 5
@@ -250,6 +261,14 @@ describe("PlinthDashjs", () => {
     video.fire("ended");
 
     assertCalledWith(mockSession.processEvent, { type: "ended" });
+  });
+
+  it("video 'pause' while ended → pause suppressed", async () => {
+    instance = await setup(player, video, mockSession);
+    video.ended = true;
+    video.fire("pause");
+
+    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
   });
 
   // 14

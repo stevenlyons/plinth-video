@@ -6,8 +6,9 @@ export type PlayerEvent =
   | { type: "can_play" }
   | { type: "play" }
   | { type: "waiting" }
+  | { type: "stall" }
   | { type: "first_frame" }
-  | { type: "can_play_through" }
+  | { type: "playing" }
   | { type: "pause" }
   | { type: "seek_start"; from_ms: number }
   | { type: "seek_end"; to_ms: number; buffer_ready: boolean }

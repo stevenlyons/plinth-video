@@ -85,25 +85,27 @@ See `packages/web/plinth-shaka/tests/shaka.test.ts` for examples using `FakePlay
 
 ## Events mapped
 
-| Shaka / video event              | Core `PlayerEvent`                           |
-|----------------------------------|----------------------------------------------|
-| Shaka `loading`                  | `load` (src from `player.getAssetUri()`)     |
-| Shaka `loaded`                   | `can_play`                                   |
-| Shaka `buffering` (true)         | `waiting` (rebuffer start / initial buffer)  |
-| Shaka `buffering` (false)        | `can_play_through`                           |
-| Shaka `adaptation`               | `quality_change`                             |
-| Shaka `error` (severity CRITICAL)| `error` (fatal)                              |
-| Shaka `error` (severity RECOVERABLE) | `error` (non-fatal)                      |
-| Shaka `unloading`                | triggers `destroy()`                         |
-| `<video> play`                   | `play`                                       |
-| `<video> playing` (first time)   | `first_frame`                                |
-| `<video> pause`                  | `pause`                                      |
-| `<video> seeking`                | `seek_start`                                 |
-| `<video> seeked`                 | `seek_end`                                   |
-| `<video> ended`                  | `ended`                                      |
-| `<video> timeupdate`             | updates playhead (heartbeat data)            |
-| `<video> error`                  | `error` (fatal, codec / decode errors)       |
+| Shaka / video event                   | Core `PlayerEvent`                                              |
+|---------------------------------------|-----------------------------------------------------------------|
+| Shaka `loading`                       | `load` (src from `player.getAssetUri()`); resets `hasFiredFirstFrame` |
+| Shaka `loaded`                        | `can_play`                                                      |
+| Shaka `buffering` (true, before first frame) | `waiting` — initial buffer stall (PlayAttempt → Buffering) |
+| Shaka `buffering` (true, after first frame)  | `stall` — mid-playback stall (Playing → Rebuffering)       |
+| Shaka `buffering` (false)             | `playing` — buffer recovered; rebuffer recovery / resume        |
+| Shaka `adaptation`                    | `quality_change`                                                |
+| Shaka `error` (severity CRITICAL)     | `error` (fatal)                                                 |
+| Shaka `error` (severity RECOVERABLE)  | `error` (non-fatal)                                             |
+| Shaka `unloading`                     | triggers `destroy()`                                            |
+| `<video> play`                        | `play`                                                          |
+| `<video> playing` (first time)        | `first_frame` — sets `hasFiredFirstFrame`                       |
+| `<video> playing` (subsequent)        | no-op (recovery handled by Shaka `buffering(false)`)            |
+| `<video> pause`                       | `pause` — suppressed when `video.ended` is true                 |
+| `<video> seeking`                     | `seek_start`                                                    |
+| `<video> seeked`                      | `seek_end`                                                      |
+| `<video> ended`                       | `ended`                                                         |
+| `<video> timeupdate`                  | updates playhead (heartbeat data)                               |
+| `<video> error`                       | `error` (fatal, codec / decode errors)                          |
 
 ### Key difference from Hls.js
 
-Shaka uses a single `buffering` event with a boolean flag for both buffer-stall and buffer-recovery, whereas Hls.js relies on the `<video>` element's `waiting` and `canplaythrough` events. The `playing` event guard (`hasFiredFirstFrame`) ensures `first_frame` is emitted only once per load — subsequent `playing` events on resume or rebuffer recovery are suppressed.
+Shaka uses a single `buffering` event with a boolean flag for both stall and recovery, whereas Hls.js relies on the `<video>` element's `waiting` and `playing` events. The `hasFiredFirstFrame` flag (reset on each `loading` event) distinguishes initial buffering (`waiting`) from mid-playback stalls (`stall`). Buffer recovery always uses Shaka's `buffering(false)` → `playing`; the `<video> playing` event only fires `first_frame` on the very first play per load.

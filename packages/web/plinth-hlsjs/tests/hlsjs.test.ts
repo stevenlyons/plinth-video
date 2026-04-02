@@ -34,6 +34,7 @@ class FakeHls {
 
 class FakeVideo extends EventTarget {
   currentTime = 0;
+  ended = false;
   buffered = { length: 0, start: (_i: number) => 0, end: (_i: number) => 0 } as unknown as TimeRanges;
   error: { code: number; message?: string } | null = null;
 
@@ -133,20 +134,40 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.processEvent, { type: "play" });
   });
 
-  // 4. video playing → first_frame
-  it("video 'playing' → processEvent({ type:'first_frame' })", async () => {
+  // 4. video playing (first time) → first_frame
+  it("video 'playing' (first time) → processEvent({ type:'first_frame' })", async () => {
     instance = await setup(hls, video, mockSession);
     video.fire("playing");
 
     assertCalledWith(mockSession.processEvent, { type: "first_frame" });
   });
 
-  // 5. video waiting → waiting
-  it("video 'waiting' → processEvent({ type:'waiting' })", async () => {
+  // 4b. video playing (subsequent) → playing
+  it("video 'playing' (subsequent) → processEvent({ type:'playing' })", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // first_frame
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("playing"); // playing
+
+    assertCalledWith(mockSession.processEvent, { type: "playing" });
+  });
+
+  // 5. video waiting (before first_frame) → waiting
+  it("video 'waiting' before first_frame → processEvent({ type:'waiting' })", async () => {
     instance = await setup(hls, video, mockSession);
     video.fire("waiting");
 
     assertCalledWith(mockSession.processEvent, { type: "waiting" });
+  });
+
+  // 5b. video waiting (after first_frame) → stall
+  it("video 'waiting' after first_frame → processEvent({ type:'stall' })", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // first_frame
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("waiting");
+
+    assertCalledWith(mockSession.processEvent, { type: "stall" });
   });
 
   // 6. video pause → pause
@@ -165,12 +186,13 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.processEvent, { type: "ended" });
   });
 
-  // 8. video canplaythrough → can_play_through
-  it("video 'canplaythrough' → processEvent({ type:'can_play_through' })", async () => {
+  // 7b. pause while ended → no pause event (natural end suppresses pause)
+  it("video 'pause' while ended → pause suppressed", async () => {
     instance = await setup(hls, video, mockSession);
-    video.fire("canplaythrough");
+    video.ended = true;
+    video.fire("pause");
 
-    assertCalledWith(mockSession.processEvent, { type: "can_play_through" });
+    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
   });
 
   // 9. video timeupdate → setPlayhead(ms)

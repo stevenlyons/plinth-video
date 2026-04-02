@@ -126,18 +126,19 @@ See `packages/android/plinth-media3/src/test/.../PlinthMedia3Test.kt` for exampl
 
 ## Events mapped
 
-| Media3 source                                              | Core `PlayerEvent`                          |
-|------------------------------------------------------------|---------------------------------------------|
-| `onMediaItemTransition`                                    | `load`                                      |
-| `onPlaybackStateChanged(STATE_READY)` (before first frame) | `can_play`                                  |
-| `onIsPlayingChanged(true)` (before first frame)            | `play`                                      |
-| `onRenderedFirstFrame`                                     | `first_frame`                               |
-| `onPlaybackStateChanged(STATE_BUFFERING)` (mid-playback)   | `waiting` (rebuffer start)                  |
-| `onIsPlayingChanged(true)` (after first frame)             | `can_play_through`                          |
-| `onIsPlayingChanged(false)` (not ended)                    | `pause`                                     |
-| `plinth.seekTo()` wrapper                                  | `seek_start` + `seek_end` (precise)         |
-| `onPositionDiscontinuity(DISCONTINUITY_REASON_SEEK)`       | `seek_start` + `seek_end` (scrubber seeks)  |
-| `onPlaybackStateChanged(STATE_ENDED)`                      | `ended`                                     |
-| `onPlayerError`                                            | `error` (fatal)                             |
-| `onVideoSizeChanged`                                       | `quality_change`                            |
-| Periodic coroutine (500 ms)                                | updates playhead (heartbeat data)           |
+| Media3 source                                              | Core `PlayerEvent`                                                            |
+|------------------------------------------------------------|-------------------------------------------------------------------------------|
+| `onMediaItemTransition`                                    | `load`                                                                        |
+| `onPlaybackStateChanged(STATE_READY)` (before first frame) | `can_play`                                                                    |
+| `onIsPlayingChanged(true)` (before first frame)            | `play`                                                                        |
+| `onRenderedFirstFrame`                                     | `first_frame` — sets `hasFiredFirstFrame`                                     |
+| `onPlaybackStateChanged(STATE_BUFFERING)` (before first frame) | `waiting` — initial buffer stall (PlayAttempt → Buffering)               |
+| `onPlaybackStateChanged(STATE_BUFFERING)` (after first frame)  | `stall` — mid-playback stall (Playing → Rebuffering)                     |
+| `onIsPlayingChanged(true)` (after first frame)             | `playing` — rebuffer recovery / resume from pause                             |
+| `onIsPlayingChanged(false)` (not ended, not mid-play stall)| `pause` — suppressed during natural end (`isEndingNaturally`) and during stall|
+| `plinth.seekTo()` wrapper                                  | `seek_start` + `seek_end` (precise)                                           |
+| `onPositionDiscontinuity(DISCONTINUITY_REASON_SEEK)`       | `seek_start` + `seek_end` (scrubber seeks)                                    |
+| `onPlaybackStateChanged(STATE_ENDED)`                      | `ended`                                                                       |
+| `onPlayerError`                                            | `error` (fatal)                                                               |
+| `onVideoSizeChanged`                                       | `quality_change`                                                              |
+| Periodic coroutine (500 ms)                                | updates playhead (heartbeat data)                                             |
