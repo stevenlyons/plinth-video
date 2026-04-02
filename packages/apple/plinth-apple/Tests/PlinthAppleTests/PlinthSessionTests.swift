@@ -119,11 +119,11 @@ final class PlinthSessionTests: XCTestCase {
         XCTAssertEqual(last.event, "rebuffer_start")
     }
 
-    func testCanPlayThroughFromRebufferingEmitsRebufferEnd() {
+    func testPlayingFromRebufferingEmitsRebufferEnd() {
         let batches = collectBeacons { session in
             reachPlaying(session)
             session.processEvent(.waiting)
-            session.processEvent(.canPlayThrough)
+            session.processEvent(.playing)
         }
         let last = batches.last!.beacons[0]
         XCTAssertEqual(last.event, "rebuffer_end")

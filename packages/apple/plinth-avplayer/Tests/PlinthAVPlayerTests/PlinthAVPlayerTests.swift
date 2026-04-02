@@ -126,14 +126,14 @@ final class PlinthAVPlayerTests: XCTestCase {
     }
 
     func testResumeNoSecondFirstFrame() {
-        // After resume, canPlayThrough → Playing but no first_frame beacon (vst_ms set)
+        // After resume, playing event → Playing but no first_frame beacon (vst_ms set)
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handlePause()
         plinth.handlePlay()
         let countBeforeResume = batches.count
-        plinth.handleCanPlayThrough()
+        plinth.handleRebufferRecovery()
         XCTAssertEqual(batches.count, countBeforeResume, "no extra beacon on resume")
     }
 
@@ -145,12 +145,12 @@ final class PlinthAVPlayerTests: XCTestCase {
         XCTAssertEqual(batches.last!.beacons[0].event, "rebuffer_start")
     }
 
-    func testCanPlayThroughFromRebufferingEmitsRebufferEnd() {
+    func testRebufferRecoveryEmitsRebufferEnd() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handleWaiting()
-        plinth.handleCanPlayThrough()
+        plinth.handleRebufferRecovery()
         XCTAssertEqual(batches.last!.beacons[0].event, "rebuffer_end")
     }
 

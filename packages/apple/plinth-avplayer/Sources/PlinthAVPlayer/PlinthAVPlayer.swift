@@ -190,7 +190,7 @@ public final class PlinthAVPlayer {
     }
 
     internal func handleWaiting() {
-        session?.processEvent(.waiting)
+        session?.processEvent(hasFiredFirstFrame ? .stall : .waiting)
     }
 
     internal func handleFirstFrame() {
@@ -198,8 +198,8 @@ public final class PlinthAVPlayer {
         session?.processEvent(.firstFrame)
     }
 
-    internal func handleCanPlayThrough() {
-        session?.processEvent(.canPlayThrough)
+    internal func handleRebufferRecovery() {
+        session?.processEvent(.playing)
     }
 
     internal func handlePause() {
@@ -251,7 +251,7 @@ public final class PlinthAVPlayer {
                 if !self.hasFiredFirstFrame {
                     self.handleFirstFrame()
                 } else {
-                    self.handleCanPlayThrough()
+                    self.handleRebufferRecovery()
                 }
             case .paused:
                 break  // handled via rate KVO to avoid spurious events

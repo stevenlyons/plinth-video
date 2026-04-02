@@ -222,12 +222,13 @@ impl Session {
                 self.state = PlayerState::Buffering;
             }
 
-            // FirstFrame or CanPlayThrough from PlayAttempt → Playing.
-            // If vst_ms not yet set, this is the initial play: record VST and emit first_frame.
-            // If vst_ms is already set, this is a resume from pause (no beacon needed here;
-            // the play beacon was already emitted on Paused→PlayAttempt).
+            // FirstFrame or Playing from PlayAttempt/Buffering → Playing.
+            // FirstFrame: initial play — record VST and emit first_frame beacon.
+            // Playing: resume from pause after initial play — vst_ms already set, no beacon.
             (PlayerState::PlayAttempt, PlayerEvent::FirstFrame)
-            | (PlayerState::PlayAttempt, PlayerEvent::CanPlayThrough) => {
+            | (PlayerState::PlayAttempt, PlayerEvent::Playing)
+            | (PlayerState::Buffering, PlayerEvent::FirstFrame)
+            | (PlayerState::Buffering, PlayerEvent::Playing) => {
                 self.played_tracker.start(now_ms);
                 self.state = PlayerState::Playing;
                 if self.vst_ms.is_none() {
@@ -250,23 +251,6 @@ impl Session {
             }
 
             // ── Buffering transitions ─────────────────────────────────────────
-            (PlayerState::Buffering, PlayerEvent::FirstFrame)
-            | (PlayerState::Buffering, PlayerEvent::CanPlayThrough) => {
-                self.played_tracker.start(now_ms);
-                self.state = PlayerState::Playing;
-                if self.vst_ms.is_none() {
-                    let vst = now_ms.saturating_sub(self.play_attempt_ts.unwrap_or(now_ms));
-                    self.vst_ms = Some(vst);
-                    let m = self.snapshot_metrics(now_ms);
-                    let b = self.make_beacon(
-                        BeaconEvent::FirstFrame,
-                        Some(PlayerState::Playing),
-                        Some(m),
-                        now_ms,
-                    );
-                    out.push(b);
-                }
-            }
 
             (PlayerState::Buffering, PlayerEvent::Error { code, message, fatal }) => {
                 self.watch_tracker.stop(now_ms);
@@ -300,7 +284,7 @@ impl Session {
                 out.push(b);
             }
 
-            (PlayerState::Playing, PlayerEvent::Waiting) => {
+            (PlayerState::Playing, PlayerEvent::Stall) => {
                 self.played_tracker.stop(now_ms);
                 self.rebuffer_tracker.start(now_ms);
                 self.rebuffer_count += 1;
@@ -432,7 +416,7 @@ impl Session {
             }
 
             // ── Rebuffering transitions ───────────────────────────────────────
-            (PlayerState::Rebuffering, PlayerEvent::CanPlayThrough) => {
+            (PlayerState::Rebuffering, PlayerEvent::Playing) => {
                 self.rebuffer_tracker.stop(now_ms);
                 self.played_tracker.start(now_ms);
                 self.state = PlayerState::Playing;
@@ -763,7 +747,7 @@ mod tests {
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 5000);
         s.process_event(PlayerEvent::Play, 8000); // → PlayAttempt
-        let beacons = s.process_event(PlayerEvent::CanPlayThrough, 8100); // → Playing
+        let beacons = s.process_event(PlayerEvent::Playing, 8100); // → Playing
         assert_eq!(s.state(), PlayerState::Playing);
         // No first_frame beacon since vst_ms already set
         assert!(beacons.is_empty());
@@ -773,7 +757,7 @@ mod tests {
     fn playing_to_rebuffering_emits_rebuffer_start() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        let beacons = s.process_event(PlayerEvent::Waiting, 5000);
+        let beacons = s.process_event(PlayerEvent::Stall, 5000);
         assert_eq!(s.state(), PlayerState::Rebuffering);
         assert_eq!(beacons.len(), 1);
         assert_eq!(beacons[0].event, BeaconEvent::RebufferStart);
@@ -786,8 +770,8 @@ mod tests {
     fn rebuffering_to_playing_emits_rebuffer_end() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000); // → Rebuffering
-        let beacons = s.process_event(PlayerEvent::CanPlayThrough, 7100); // → Playing
+        s.process_event(PlayerEvent::Stall, 5000); // → Rebuffering
+        let beacons = s.process_event(PlayerEvent::Playing, 7100); // → Playing
         assert_eq!(s.state(), PlayerState::Playing);
         assert_eq!(beacons.len(), 1);
         assert_eq!(beacons[0].event, BeaconEvent::RebufferEnd);
@@ -924,7 +908,7 @@ mod tests {
     fn rebuffering_pause_emits_rebuffer_end_then_pause() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000);
+        s.process_event(PlayerEvent::Stall, 5000);
         let beacons = s.process_event(PlayerEvent::Pause, 7000);
         assert_eq!(s.state(), PlayerState::Paused);
         assert_eq!(beacons.len(), 2);
@@ -938,7 +922,7 @@ mod tests {
     fn rebuffering_seek_emits_rebuffer_end_then_seek_start() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000);
+        s.process_event(PlayerEvent::Stall, 5000);
         let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 4500 }, 6000);
         assert_eq!(s.state(), PlayerState::Seeking);
         assert_eq!(beacons.len(), 2);
@@ -963,7 +947,7 @@ mod tests {
         reach_playing(&mut s, 0); // first_frame at t=1000, played starts
         s.process_event(PlayerEvent::Pause, 6000); // played: 5000ms
         s.process_event(PlayerEvent::Play, 10_000); // resume
-        s.process_event(PlayerEvent::CanPlayThrough, 10_000); // → Playing (no elapsed yet)
+        s.process_event(PlayerEvent::Playing, 10_000); // → Playing (no elapsed yet)
         let beacons = s.process_event(PlayerEvent::Ended, 13_000); // played: 5000 + 3000 = 8000
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.played_ms, 8000);
@@ -973,10 +957,10 @@ mod tests {
     fn rebuffer_ms_accumulates_per_rebuffer() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000); // rebuffer starts
-        s.process_event(PlayerEvent::CanPlayThrough, 7000); // rebuffer ends: +2000
-        s.process_event(PlayerEvent::Waiting, 10_000); // second rebuffer
-        let beacons = s.process_event(PlayerEvent::CanPlayThrough, 11_500); // +1500
+        s.process_event(PlayerEvent::Stall, 5000); // rebuffer starts
+        s.process_event(PlayerEvent::Playing, 7000); // rebuffer ends: +2000
+        s.process_event(PlayerEvent::Stall, 10_000); // second rebuffer
+        let beacons = s.process_event(PlayerEvent::Playing, 11_500); // +1500
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_ms, 3500);
         assert_eq!(m.rebuffer_count, 2);
@@ -989,7 +973,7 @@ mod tests {
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 3000);   // watched so far: 3000
         s.process_event(PlayerEvent::Play, 5000);    // still watching (paused counts)
-        s.process_event(PlayerEvent::CanPlayThrough, 5000);
+        s.process_event(PlayerEvent::Playing, 5000);
         let beacons = s.process_event(PlayerEvent::Ended, 8000); // total: 8000
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.watched_ms, 8000);
@@ -1206,7 +1190,7 @@ mod tests {
     fn rebuffering_error_stops_rebuffer_timer_in_metrics() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000); // rebuffer starts
+        s.process_event(PlayerEvent::Stall, 5000); // rebuffer starts
         let beacons = s.process_event(
             PlayerEvent::Error { code: "STALL_ERR".to_string(), message: None, fatal: true },
             7000,
@@ -1351,21 +1335,6 @@ mod tests {
         assert_eq!(s.state(), PlayerState::Loading);
     }
 
-    #[test]
-    fn can_play_through_from_play_attempt_triggers_first_frame() {
-        let mut s = make_session();
-        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
-        s.process_event(PlayerEvent::CanPlay, 0);
-        s.process_event(PlayerEvent::Play, 0);
-        // CanPlayThrough directly from PlayAttempt (no Waiting first)
-        let beacons = s.process_event(PlayerEvent::CanPlayThrough, 800);
-        assert_eq!(s.state(), PlayerState::Playing);
-        assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::FirstFrame);
-        let m = beacons[0].metrics.as_ref().unwrap();
-        assert_eq!(m.vst_ms, Some(800));
-    }
-
     // ── play_id / session identity ────────────────────────────────────────────
 
     #[test]
@@ -1453,7 +1422,7 @@ mod tests {
     fn heartbeat_emits_during_rebuffering() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5000); // → Rebuffering
+        s.process_event(PlayerEvent::Stall, 5000); // → Rebuffering
         let h = s.tick(15_000);
         assert_eq!(h.len(), 1);
         assert_eq!(h[0].state, Some(PlayerState::Rebuffering));
@@ -1481,7 +1450,7 @@ mod tests {
         let _ = all;
 
         // rebuffer_start (seq=2)
-        let bs = s.process_event(PlayerEvent::Waiting, 15_000);
+        let bs = s.process_event(PlayerEvent::Stall, 15_000);
         assert_eq!(bs[0].event, BeaconEvent::RebufferStart);
         assert_eq!(bs[0].seq, 2);
         let m = bs[0].metrics.as_ref().unwrap();
@@ -1489,7 +1458,7 @@ mod tests {
         assert_eq!(m.rebuffer_ms, 0); // just started
 
         // rebuffer_end 2100ms later (seq=3)
-        let bs = s.process_event(PlayerEvent::CanPlayThrough, 17_100);
+        let bs = s.process_event(PlayerEvent::Playing, 17_100);
         assert_eq!(bs[0].event, BeaconEvent::RebufferEnd);
         assert_eq!(bs[0].seq, 3);
         assert_eq!(bs[0].state, Some(PlayerState::Playing));
@@ -1571,7 +1540,7 @@ mod tests {
     fn rebuffering_pause_beacon_includes_playhead_ms() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
-        s.process_event(PlayerEvent::Waiting, 5_000);
+        s.process_event(PlayerEvent::Stall, 5_000);
         s.set_playhead(8_000);
         let beacons = s.process_event(PlayerEvent::Pause, 8_000);
         // beacons[0] = rebuffer_end, beacons[1] = pause
@@ -1666,8 +1635,8 @@ mod tests {
         all.extend(s.process_event(PlayerEvent::Pause, 5_000));
         // Resume → PlayAttempt (play, seq=3)
         all.extend(s.process_event(PlayerEvent::Play, 8_000));
-        // CanPlayThrough → Playing (no beacon — resume, not first_frame)
-        all.extend(s.process_event(PlayerEvent::CanPlayThrough, 8_100));
+        // Playing → Playing (no beacon — resume, not first_frame)
+        all.extend(s.process_event(PlayerEvent::Playing, 8_100));
         // SeekStart (seek_start, seq=4)
         all.extend(s.process_event(PlayerEvent::SeekStart { from_ms: 10_000 }, 11_000));
         // SeekEnd buffer_ready → Playing (seek_end, seq=5)

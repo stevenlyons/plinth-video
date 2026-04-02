@@ -28,6 +28,7 @@ export class PlinthHlsJs {
   private hls: Hls;
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
+  private hasFiredFirstFrame = false;
   private destroyed = false;
   private hlsHandlers = new Map<string, HlsHandler>();
   private videoHandlers = new Map<string, EventListener>();
@@ -94,6 +95,7 @@ export class PlinthHlsJs {
 
   private attachHlsListeners(): void {
     const onManifestLoading: HlsHandler = (_event, data) => {
+      this.hasFiredFirstFrame = false;
       this.emit({ type: "load", src: data.url as string });
     };
     this.hls.on(Events.MANIFEST_LOADING, onManifestLoading as any);
@@ -144,15 +146,26 @@ export class PlinthHlsJs {
     this.video.addEventListener("play", onPlay);
     this.videoHandlers.set("play", onPlay);
 
-    const onPlaying: EventListener = () => this.emit({ type: "first_frame" });
+    const onPlaying: EventListener = () => {
+      if (!this.hasFiredFirstFrame) {
+        this.hasFiredFirstFrame = true;
+        this.emit({ type: "first_frame" });
+      } else {
+        this.emit({ type: "playing" });
+      }
+    };
     this.video.addEventListener("playing", onPlaying);
     this.videoHandlers.set("playing", onPlaying);
 
-    const onWaiting: EventListener = () => this.emit({ type: "waiting" });
+    const onWaiting: EventListener = () =>
+      this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
     this.video.addEventListener("waiting", onWaiting);
     this.videoHandlers.set("waiting", onWaiting);
 
-    const onPause: EventListener = () => this.emit({ type: "pause" });
+    const onPause: EventListener = () => {
+      if (this.video.ended) return;
+      this.emit({ type: "pause" });
+    };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
@@ -175,10 +188,6 @@ export class PlinthHlsJs {
     const onEnded: EventListener = () => this.emit({ type: "ended" });
     this.video.addEventListener("ended", onEnded);
     this.videoHandlers.set("ended", onEnded);
-
-    const onCanPlayThrough: EventListener = () => this.emit({ type: "can_play_through" });
-    this.video.addEventListener("canplaythrough", onCanPlayThrough);
-    this.videoHandlers.set("canplaythrough", onCanPlayThrough);
 
     const onTimeUpdate: EventListener = () => {
       const ms = this.video.currentTime * 1000;

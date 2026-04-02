@@ -106,9 +106,9 @@ export class PlinthShaka {
 
     const onBuffering: EventListener = (e) => {
       if ((e as any).buffering) {
-        this.emit({ type: "waiting" });
+        this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
       } else {
-        this.emit({ type: "can_play_through" });
+        this.emit({ type: "playing" });
       }
     };
     this.player.addEventListener("buffering", onBuffering);
@@ -167,7 +167,10 @@ export class PlinthShaka {
     this.video.addEventListener("playing", onPlaying);
     this.videoHandlers.set("playing", onPlaying);
 
-    const onPause: EventListener = () => this.emit({ type: "pause" });
+    const onPause: EventListener = () => {
+      if (this.video.ended) return;
+      this.emit({ type: "pause" });
+    };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 

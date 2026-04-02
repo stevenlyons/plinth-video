@@ -42,11 +42,14 @@ internal object PlayEvent : PlayerEventDto()
 @Serializable @SerialName("waiting")
 internal object WaitingEvent : PlayerEventDto()
 
+@Serializable @SerialName("stall")
+internal object StallEvent : PlayerEventDto()
+
 @Serializable @SerialName("first_frame")
 internal object FirstFrameEvent : PlayerEventDto()
 
-@Serializable @SerialName("can_play_through")
-internal object CanPlayThroughEvent : PlayerEventDto()
+@Serializable @SerialName("playing")
+internal object PlayingEvent : PlayerEventDto()
 
 @Serializable @SerialName("pause")
 internal object PauseEvent : PlayerEventDto()
@@ -226,11 +229,12 @@ class PlinthMedia3 private constructor(
     internal fun handleCanPlay() = sendEvent(CanPlayEvent)
     internal fun handlePlay() = sendEvent(PlayEvent)
     internal fun handleWaiting() = sendEvent(WaitingEvent)
+    internal fun handleStall() = sendEvent(StallEvent)
     internal fun handleFirstFrame() {
         hasFiredFirstFrame = true
         sendEvent(FirstFrameEvent)
     }
-    internal fun handleCanPlayThrough() = sendEvent(CanPlayThroughEvent)
+    internal fun handleRebufferRecovery() = sendEvent(PlayingEvent)
     internal fun handlePause() = sendEvent(PauseEvent)
     internal fun handleEnded() {
         isEndingNaturally = true
@@ -252,15 +256,15 @@ class PlinthMedia3 private constructor(
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) {
-            if (!hasFiredFirstFrame) handlePlay() else handleCanPlayThrough()
+            if (!hasFiredFirstFrame) handlePlay() else handleRebufferRecovery()
             startPlayheadTracking()
         } else {
             playheadJob?.cancel()
             playheadJob = null
             if (!isEndingNaturally && player.playbackState != Player.STATE_ENDED) {
                 if (player.playbackState == Player.STATE_BUFFERING && hasFiredFirstFrame) {
-                    // Mid-play rebuffering stall — emit waiting to trigger Rebuffering state
-                    handleWaiting()
+                    // Mid-play rebuffering stall — emit stall to trigger Rebuffering state
+                    handleStall()
                 } else {
                     handlePause()
                 }

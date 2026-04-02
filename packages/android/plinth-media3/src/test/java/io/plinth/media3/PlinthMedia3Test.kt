@@ -109,14 +109,19 @@ class PlinthMedia3Test {
         assertThat(capturedEvents[0].jsonType()).isEqualTo("waiting")
     }
 
+    @Test fun `handleStall sends stall`() {
+        plinth.handleStall()
+        assertThat(capturedEvents[0].jsonType()).isEqualTo("stall")
+    }
+
     @Test fun `handleFirstFrame sends first_frame`() {
         plinth.handleFirstFrame()
         assertThat(capturedEvents[0].jsonType()).isEqualTo("first_frame")
     }
 
-    @Test fun `handleCanPlayThrough sends can_play_through`() {
-        plinth.handleCanPlayThrough()
-        assertThat(capturedEvents[0].jsonType()).isEqualTo("can_play_through")
+    @Test fun `handleRebufferRecovery sends playing`() {
+        plinth.handleRebufferRecovery()
+        assertThat(capturedEvents[0].jsonType()).isEqualTo("playing")
     }
 
     @Test fun `handlePause sends pause`() {
@@ -161,12 +166,12 @@ class PlinthMedia3Test {
         assertThat(capturedEvents.last().jsonType()).isEqualTo("pause")
     }
 
-    @Test fun `resume after pause sends can_play_through (not play)`() {
+    @Test fun `resume after pause sends playing (not play)`() {
         reachPlaying()
         plinth.handlePause()
         capturedEvents.clear()
-        plinth.handleCanPlayThrough()
-        assertThat(capturedEvents.eventTypes()).containsExactly("can_play_through")
+        plinth.handleRebufferRecovery()
+        assertThat(capturedEvents.eventTypes()).containsExactly("playing")
     }
 
     // ── onPlaybackStateChanged routing ────────────────────────────────────────
@@ -207,11 +212,11 @@ class PlinthMedia3Test {
         assertThat(capturedEvents[0].jsonType()).isEqualTo("play")
     }
 
-    @Test fun `onIsPlayingChanged true after first frame sends can_play_through`() {
+    @Test fun `onIsPlayingChanged true after first frame sends playing`() {
         plinth.handleFirstFrame()
         capturedEvents.clear()
         plinth.onIsPlayingChanged(true)
-        assertThat(capturedEvents[0].jsonType()).isEqualTo("can_play_through")
+        assertThat(capturedEvents[0].jsonType()).isEqualTo("playing")
     }
 
     @Test fun `onIsPlayingChanged false when not buffering sends pause`() {
@@ -220,12 +225,12 @@ class PlinthMedia3Test {
         assertThat(capturedEvents[0].jsonType()).isEqualTo("pause")
     }
 
-    @Test fun `onIsPlayingChanged false when buffering after first frame sends waiting (rebuffering)`() {
+    @Test fun `onIsPlayingChanged false when buffering after first frame sends stall (rebuffering)`() {
         plinth.handleFirstFrame()
         capturedEvents.clear()
         `when`(fakePlayer.playbackState).thenReturn(Player.STATE_BUFFERING)
         plinth.onIsPlayingChanged(false)
-        assertThat(capturedEvents[0].jsonType()).isEqualTo("waiting")
+        assertThat(capturedEvents[0].jsonType()).isEqualTo("stall")
     }
 
     @Test fun `onIsPlayingChanged false when buffering before first frame sends pause`() {
