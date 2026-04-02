@@ -182,6 +182,7 @@ Use `pnpm publish` — **not** `npm publish`. pnpm replaces the `workspace:*` de
 Publish `plinth-js` first since the others depend on it:
 
 ```bash
+npm login
 cd packages/web/plinth-js && pnpm publish --no-git-checks && cd ../../..
 cd packages/web/plinth-hlsjs && pnpm publish --no-git-checks && cd ../../..
 cd packages/web/plinth-shaka && pnpm publish --no-git-checks && cd ../../..
