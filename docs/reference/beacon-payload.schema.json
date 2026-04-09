@@ -26,7 +26,7 @@
         "seq": {
           "type": "integer",
           "minimum": 0,
-          "description": "Monotonically increasing integer scoped to the play session, starting at 0 for session_open. Gaps indicate lost beacons."
+          "description": "Monotonically increasing integer scoped to the play session, starting at 0 for play. Gaps indicate lost beacons."
         },
         "play_id": {
           "type": "string",
@@ -36,43 +36,43 @@
         "ts": {
           "type": "integer",
           "minimum": 0,
-          "description": "Unix epoch milliseconds (absolute) at the moment the beacon was emitted, as measured by the client clock. Absolute timestamps ensure every beacon is independently interpretable — relative offsets would become unresolvable if session_open is dropped in transit."
+          "description": "Unix epoch milliseconds (absolute) at the moment the beacon was emitted, as measured by the client clock. Absolute timestamps ensure every beacon is independently interpretable — relative offsets would become unresolvable if the play beacon is dropped in transit."
         },
         "event": {
           "type": "string",
           "description": "Beacon type. Drives which additional fields are present.",
           "enum": [
-            "session_open",
-            "first_frame",
-            "pause",
             "play",
+            "first_frame",
+            "playing",
+            "pause",
             "seek_start",
             "seek_end",
-            "rebuffer_start",
-            "rebuffer_end",
+            "stall",
             "quality_change",
             "error",
             "heartbeat",
-            "session_end"
+            "ended",
+            "completed"
           ]
         },
         "state": {
           "$ref": "#/$defs/PlayerState",
-          "description": "State machine state at the moment the beacon was emitted. Omitted only on session_open (state is implicitly play_attempt)."
+          "description": "State machine state at the moment the beacon was emitted. Omitted only on play (seq=0; state is implicitly play_attempt)."
         },
         "metrics": {
           "$ref": "#/$defs/Metrics",
-          "description": "Accumulated QoE metrics at beacon time. Included on all beacons except session_open. Each beacon carries the full cumulative snapshot, so any single beacon can reconstruct session health without prior context."
+          "description": "Accumulated QoE metrics at beacon time. Included on all beacons except play (seq=0). Each beacon carries the full cumulative snapshot, so any single beacon can reconstruct session health without prior context."
         },
         "playhead_ms": {
           "type": "integer",
           "minimum": 0,
-          "description": "Current playhead position in the content timeline in milliseconds. Required on heartbeat. Also present on pause and session_end beacons, capturing the last known position at each session boundary."
+          "description": "Current playhead position in the content timeline in milliseconds. Required on heartbeat, pause, ended, and completed — capturing the last known position at each session boundary."
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "event": { "const": "session_open" } }, "required": ["event"] },
+          "if": { "properties": { "event": { "const": "play" } }, "required": ["event"] },
           "then": {
             "required": ["video", "client", "sdk"],
             "properties": {
@@ -104,17 +104,18 @@
               "playhead_ms": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Current playhead position in the content timeline in milliseconds. Used to detect stalls and validate metrics on the server."
+                "description": "Current playhead position in the content timeline in milliseconds. Emitted only when no other beacon has been sent for heartbeat_interval_ms and the session is active."
               }
             }
           }
         },
         {
           "if": {
-            "properties": { "event": { "enum": ["pause", "session_end"] } },
+            "properties": { "event": { "enum": ["pause", "ended", "completed"] } },
             "required": ["event"]
           },
           "then": {
+            "required": ["playhead_ms"],
             "properties": {
               "playhead_ms": {
                 "type": "integer",
@@ -191,7 +192,7 @@
         "rebuffer_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of discrete rebuffer events (each rebuffer_start increments this)."
+          "description": "Number of discrete stall events (each stall beacon increments this)."
         },
         "error_count": {
           "type": "integer",
@@ -250,7 +251,7 @@
         "bitrate_bps": { "type": "integer", "minimum": 0, "description": "Selected rendition bitrate in bits per second." },
         "width":       { "type": "integer", "minimum": 0, "description": "Video width in pixels." },
         "height":      { "type": "integer", "minimum": 0, "description": "Video height in pixels." },
-        "framerate":   { "type": "number",  "minimum": 0, "description": "Video framerate (e.g. 29.97, 60)." },
+        "framerate":   { "type": "string",               "description": "Video framerate as a decimal string (e.g. \"29.97\", \"60\"). MPEG-DASH fractional values such as \"30000/1001\" are normalised to decimal by the integration." },
         "codec":       { "type": "string",               "description": "Codec string as reported by the player (e.g. 'avc1.4d401f', 'hvc1')." }
       }
     },

@@ -46,7 +46,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(config: Config, meta: SessionMeta, _now_ms: u64) -> Self {
+    pub fn new(config: Config, meta: SessionMeta, now_ms: u64) -> Self {
         Session {
             config,
             meta,
@@ -62,7 +62,7 @@ impl Session {
             rebuffer_tracker: TimeTracker::new(),
             play_attempt_ts: None,
             seek_from_ms: None,
-            last_heartbeat_ms: None,
+            last_heartbeat_ms: Some(now_ms),
             playhead_ms: 0,
         }
     }
@@ -150,9 +150,9 @@ impl Session {
         self.playhead_ms = 0;
     }
 
-    /// Emit session_open beacon (seq=0, no state/metrics).
-    fn emit_session_open(&mut self, ts: u64) -> Beacon {
-        let mut b = self.make_beacon(BeaconEvent::SessionOpen, None, None, ts);
+    /// Emit play beacon (seq=0, no state/metrics). Carries session metadata.
+    fn emit_play_open(&mut self, ts: u64) -> Beacon {
+        let mut b = self.make_beacon(BeaconEvent::Play, None, None, ts);
         b.video = Some(self.meta.video.clone());
         b.client = Some(self.meta.client.clone());
         b.sdk = Some(self.meta.sdk.clone());
@@ -194,15 +194,15 @@ impl Session {
             (PlayerState::Ready, PlayerEvent::Play) => {
                 self.begin_session(now_ms);
                 self.state = PlayerState::PlayAttempt;
-                out.push(self.emit_session_open(now_ms));
+                out.push(self.emit_play_open(now_ms));
             }
 
-            // Paused → PlayAttempt: resume (same session, emit play beacon)
+            // Paused → PlayAttempt: resume (same session, emit playing beacon)
             (PlayerState::Paused, PlayerEvent::Play) => {
                 self.state = PlayerState::PlayAttempt;
                 let m = self.snapshot_metrics(now_ms);
                 let b = self.make_beacon(
-                    BeaconEvent::Play,
+                    BeaconEvent::Playing,
                     Some(PlayerState::PlayAttempt),
                     Some(m),
                     now_ms,
@@ -214,7 +214,7 @@ impl Session {
             (PlayerState::Ended, PlayerEvent::Play) => {
                 self.begin_session(now_ms);
                 self.state = PlayerState::PlayAttempt;
-                out.push(self.emit_session_open(now_ms));
+                out.push(self.emit_play_open(now_ms));
             }
 
             // ── PlayAttempt transitions ───────────────────────────────────────
@@ -223,8 +223,8 @@ impl Session {
             }
 
             // FirstFrame or Playing from PlayAttempt/Buffering → Playing.
-            // FirstFrame: initial play — record VST and emit first_frame beacon.
-            // Playing: resume from pause after initial play — vst_ms already set, no beacon.
+            // On first play (vst_ms not yet set): record VST, emit first_frame then playing.
+            // On subsequent Playing events (vst_ms already set): no beacons (already playing).
             (PlayerState::PlayAttempt, PlayerEvent::FirstFrame)
             | (PlayerState::PlayAttempt, PlayerEvent::Playing)
             | (PlayerState::Buffering, PlayerEvent::FirstFrame)
@@ -238,10 +238,18 @@ impl Session {
                     let b = self.make_beacon(
                         BeaconEvent::FirstFrame,
                         Some(PlayerState::Playing),
-                        Some(m),
+                        Some(m.clone()),
                         now_ms,
                     );
                     out.push(b);
+                    // Immediately follow first_frame with playing to signal active playback.
+                    let b2 = self.make_beacon(
+                        BeaconEvent::Playing,
+                        Some(PlayerState::Playing),
+                        Some(m),
+                        now_ms,
+                    );
+                    out.push(b2);
                 }
             }
 
@@ -291,7 +299,7 @@ impl Session {
                 self.state = PlayerState::Rebuffering;
                 let m = self.snapshot_metrics(now_ms);
                 let b = self.make_beacon(
-                    BeaconEvent::RebufferStart,
+                    BeaconEvent::Stall,
                     Some(PlayerState::Rebuffering),
                     Some(m),
                     now_ms,
@@ -305,7 +313,7 @@ impl Session {
                 self.state = PlayerState::Ended;
                 let m = self.snapshot_metrics(now_ms);
                 let mut b = self.make_beacon(
-                    BeaconEvent::SessionEnd,
+                    BeaconEvent::Completed,
                     Some(PlayerState::Ended),
                     Some(m),
                     now_ms,
@@ -353,7 +361,7 @@ impl Session {
                 self.state = PlayerState::Idle;
                 let m = self.snapshot_metrics(now_ms);
                 let mut b = self.make_beacon(
-                    BeaconEvent::SessionEnd,
+                    BeaconEvent::Ended,
                     Some(PlayerState::Ended),
                     Some(m),
                     now_ms,
@@ -397,7 +405,7 @@ impl Session {
                         self.rebuffer_count += 1;
                         let m2 = self.snapshot_metrics(now_ms);
                         let b2 = self.make_beacon(
-                            BeaconEvent::RebufferStart,
+                            BeaconEvent::Stall,
                             Some(PlayerState::Rebuffering),
                             Some(m2),
                             now_ms,
@@ -422,7 +430,7 @@ impl Session {
                 self.state = PlayerState::Playing;
                 let m = self.snapshot_metrics(now_ms);
                 let b = self.make_beacon(
-                    BeaconEvent::RebufferEnd,
+                    BeaconEvent::Playing,
                     Some(PlayerState::Playing),
                     Some(m),
                     now_ms,
@@ -433,10 +441,10 @@ impl Session {
             (PlayerState::Rebuffering, PlayerEvent::Pause) => {
                 self.rebuffer_tracker.stop(now_ms);
                 self.state = PlayerState::Paused;
-                // Emit rebuffer_end to close the rebuffer interval, then pause.
+                // Emit playing to close the rebuffer interval, then pause.
                 let m = self.snapshot_metrics(now_ms);
                 let b1 = self.make_beacon(
-                    BeaconEvent::RebufferEnd,
+                    BeaconEvent::Playing,
                     Some(PlayerState::Paused),
                     Some(m.clone()),
                     now_ms,
@@ -458,10 +466,10 @@ impl Session {
                 self.pre_seek_state = Some(PlayerState::Playing);
                 self.seek_from_ms = Some(from_ms);
                 self.state = PlayerState::Seeking;
-                // Emit rebuffer_end to close the interval, then seek_start.
+                // Emit playing to close the rebuffer interval, then seek_start.
                 let m = self.snapshot_metrics(now_ms);
                 let b1 = self.make_beacon(
-                    BeaconEvent::RebufferEnd,
+                    BeaconEvent::Playing,
                     Some(PlayerState::Seeking),
                     Some(m.clone()),
                     now_ms,
@@ -512,12 +520,20 @@ impl Session {
             _ => {}
         }
 
+        // Reset the heartbeat countdown whenever any beacon is emitted so that
+        // heartbeat fires only if the session has been silent for the full interval.
+        if !out.is_empty() {
+            if let Some(ref mut last) = self.last_heartbeat_ms {
+                *last = now_ms;
+            }
+        }
+
         out
     }
 
     /// Called by the platform on a regular interval. Emits a heartbeat beacon if
-    /// `heartbeat_interval_ms` has elapsed since the last heartbeat and the session
-    /// is in an active state.
+    /// `heartbeat_interval_ms` has elapsed since the last beacon (of any type) and
+    /// the session is in an active state.
     pub fn tick(&mut self, now_ms: u64) -> Vec<Beacon> {
         let last = match self.last_heartbeat_ms {
             Some(t) => t,
@@ -571,7 +587,7 @@ impl Session {
             self.watch_tracker.stop(now_ms);
             let m = self.snapshot_metrics(now_ms);
             let mut b = self.make_beacon(
-                BeaconEvent::SessionEnd,
+                BeaconEvent::Ended,
                 Some(PlayerState::Ended),
                 Some(m),
                 now_ms,
@@ -626,7 +642,7 @@ mod tests {
     }
 
     /// Drive session to the Playing state from scratch; returns the
-    /// beacons emitted along the way (session_open + first_frame).
+    /// beacons emitted along the way (play + first_frame + playing).
     fn reach_playing(s: &mut Session, t: u64) -> Vec<Beacon> {
         let mut all = Vec::new();
         all.extend(s.process_event(PlayerEvent::Load { src: "http://example.com/video.m3u8".to_string() }, t));
@@ -655,14 +671,14 @@ mod tests {
     }
 
     #[test]
-    fn ready_to_play_attempt_emits_session_open() {
+    fn ready_to_play_attempt_emits_play() {
         let mut s = make_session();
         s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
         s.process_event(PlayerEvent::CanPlay, 100);
         let beacons = s.process_event(PlayerEvent::Play, 200);
         assert_eq!(s.state(), PlayerState::PlayAttempt);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionOpen);
+        assert_eq!(beacons[0].event, BeaconEvent::Play);
         assert_eq!(beacons[0].seq, 0);
         assert!(beacons[0].state.is_none());
         assert!(beacons[0].metrics.is_none());
@@ -687,8 +703,8 @@ mod tests {
         let mut s = make_session();
         let beacons = reach_playing(&mut s, 0);
         assert_eq!(s.state(), PlayerState::Playing);
-        // session_open (seq=0) + first_frame (seq=1)
-        assert_eq!(beacons.len(), 2);
+        // play (seq=0) + first_frame (seq=1) + playing (seq=2)
+        assert_eq!(beacons.len(), 3);
         let ff = &beacons[1];
         assert_eq!(ff.event, BeaconEvent::FirstFrame);
         assert_eq!(ff.seq, 1);
@@ -697,6 +713,10 @@ mod tests {
         assert_eq!(m.vst_ms, Some(1000));
         assert_eq!(m.played_ms, 0);
         assert_eq!(m.watched_ms, 1000);
+        // playing beacon immediately follows first_frame
+        assert_eq!(beacons[2].event, BeaconEvent::Playing);
+        assert_eq!(beacons[2].seq, 2);
+        assert_eq!(beacons[2].ts, beacons[1].ts);
     }
 
     #[test]
@@ -708,8 +728,10 @@ mod tests {
         s.process_event(PlayerEvent::Waiting, 0); // → Buffering
         let beacons = s.process_event(PlayerEvent::FirstFrame, 1500);
         assert_eq!(s.state(), PlayerState::Playing);
-        assert_eq!(beacons.len(), 1);
+        // first_frame + playing
+        assert_eq!(beacons.len(), 2);
         assert_eq!(beacons[0].event, BeaconEvent::FirstFrame);
+        assert_eq!(beacons[1].event, BeaconEvent::Playing);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.vst_ms, Some(1500));
     }
@@ -729,16 +751,16 @@ mod tests {
     }
 
     #[test]
-    fn paused_play_emits_play_beacon_and_resumes_session() {
+    fn paused_play_emits_playing_beacon_and_resumes_session() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 5000);
         let beacons = s.process_event(PlayerEvent::Play, 8000);
         assert_eq!(s.state(), PlayerState::PlayAttempt);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::Play);
-        // Play beacon seq should be 3 (0=session_open, 1=first_frame, 2=pause)
-        assert_eq!(beacons[0].seq, 3);
+        assert_eq!(beacons[0].event, BeaconEvent::Playing);
+        // playing beacon seq should be 4 (0=play, 1=first_frame, 2=playing, 3=pause)
+        assert_eq!(beacons[0].seq, 4);
     }
 
     #[test]
@@ -746,35 +768,35 @@ mod tests {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 5000);
-        s.process_event(PlayerEvent::Play, 8000); // → PlayAttempt
-        let beacons = s.process_event(PlayerEvent::Playing, 8100); // → Playing
+        s.process_event(PlayerEvent::Play, 8000); // → PlayAttempt, emits playing beacon
+        let beacons = s.process_event(PlayerEvent::Playing, 8100); // → Playing (vst_ms already set)
         assert_eq!(s.state(), PlayerState::Playing);
-        // No first_frame beacon since vst_ms already set
+        // No first_frame or playing beacon since vst_ms already set
         assert!(beacons.is_empty());
     }
 
     #[test]
-    fn playing_to_rebuffering_emits_rebuffer_start() {
+    fn playing_to_rebuffering_emits_stall() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         let beacons = s.process_event(PlayerEvent::Stall, 5000);
         assert_eq!(s.state(), PlayerState::Rebuffering);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::RebufferStart);
+        assert_eq!(beacons[0].event, BeaconEvent::Stall);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_count, 1);
         assert_eq!(m.rebuffer_ms, 0); // not yet accumulated
     }
 
     #[test]
-    fn rebuffering_to_playing_emits_rebuffer_end() {
+    fn rebuffering_to_playing_emits_playing() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Stall, 5000); // → Rebuffering
         let beacons = s.process_event(PlayerEvent::Playing, 7100); // → Playing
         assert_eq!(s.state(), PlayerState::Playing);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::RebufferEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Playing);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_ms, 2100);
         assert_eq!(m.rebuffer_count, 1);
@@ -818,12 +840,12 @@ mod tests {
             PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
             11_400,
         );
-        // seek_end + rebuffer_start
+        // seek_end + stall
         assert_eq!(s.state(), PlayerState::Rebuffering);
         assert_eq!(beacons.len(), 2);
         assert_eq!(beacons[0].event, BeaconEvent::SeekEnd);
         assert_eq!(beacons[0].state, Some(PlayerState::Rebuffering));
-        assert_eq!(beacons[1].event, BeaconEvent::RebufferStart);
+        assert_eq!(beacons[1].event, BeaconEvent::Stall);
     }
 
     #[test]
@@ -841,13 +863,13 @@ mod tests {
     }
 
     #[test]
-    fn playing_ended_emits_session_end() {
+    fn playing_ended_emits_completed() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         let beacons = s.process_event(PlayerEvent::Ended, 120_000);
         assert_eq!(s.state(), PlayerState::Ended);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Completed);
         assert_eq!(beacons[0].state, Some(PlayerState::Ended));
     }
 
@@ -857,13 +879,12 @@ mod tests {
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Ended, 120_000);
         let first_play_id = {
-            // peek via session_open that was at seq=0
             s.play_id.clone()
         };
         let beacons = s.process_event(PlayerEvent::Play, 125_000);
-        // New session_open with seq=0 again
+        // New play beacon with seq=0 again
         assert_eq!(beacons[0].seq, 0);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionOpen);
+        assert_eq!(beacons[0].event, BeaconEvent::Play);
         assert_ne!(beacons[0].play_id, first_play_id);
     }
 
@@ -905,28 +926,28 @@ mod tests {
     }
 
     #[test]
-    fn rebuffering_pause_emits_rebuffer_end_then_pause() {
+    fn rebuffering_pause_emits_playing_then_pause() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Stall, 5000);
         let beacons = s.process_event(PlayerEvent::Pause, 7000);
         assert_eq!(s.state(), PlayerState::Paused);
         assert_eq!(beacons.len(), 2);
-        assert_eq!(beacons[0].event, BeaconEvent::RebufferEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Playing);
         assert_eq!(beacons[1].event, BeaconEvent::Pause);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_ms, 2000);
     }
 
     #[test]
-    fn rebuffering_seek_emits_rebuffer_end_then_seek_start() {
+    fn rebuffering_seek_emits_playing_then_seek_start() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Stall, 5000);
         let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 4500 }, 6000);
         assert_eq!(s.state(), PlayerState::Seeking);
         assert_eq!(beacons.len(), 2);
-        assert_eq!(beacons[0].event, BeaconEvent::RebufferEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Playing);
         assert_eq!(beacons[1].event, BeaconEvent::SeekStart);
     }
 
@@ -985,10 +1006,11 @@ mod tests {
         s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
         s.process_event(PlayerEvent::CanPlay, 0);
         let beacons = s.process_event(PlayerEvent::Play, 0);
-        // session_open has no metrics
+        // play beacon has no metrics
         assert!(beacons[0].metrics.is_none());
-        // simulate first_frame 1.3s later
+        // simulate first_frame 1.3s later → emits first_frame + playing
         let beacons = s.process_event(PlayerEvent::FirstFrame, 1300);
+        assert_eq!(beacons[0].event, BeaconEvent::FirstFrame);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.vst_ms, Some(1300));
     }
@@ -998,11 +1020,13 @@ mod tests {
     #[test]
     fn tick_emits_heartbeat_at_interval() {
         let mut s = make_session();
+        // reach_playing sends FirstFrame at t=1000, so last_heartbeat_ms = 1000.
+        // Heartbeat fires when 10s have elapsed since the last beacon.
         reach_playing(&mut s, 0);
-        // Tick before interval (9s) — should be silent
+        // Tick at 9s — only 8s since last beacon (first_frame at t=1000) — silent
         assert!(s.tick(9_000).is_empty());
-        // Tick at interval (10s) — should emit heartbeat
-        let beacons = s.tick(10_000);
+        // Tick at 11s — 10s since last beacon — should emit heartbeat
+        let beacons = s.tick(11_000);
         assert_eq!(beacons.len(), 1);
         assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
         assert!(beacons[0].playhead_ms.is_some());
@@ -1025,10 +1049,10 @@ mod tests {
     #[test]
     fn heartbeat_seq_increments_correctly() {
         let mut s = make_session();
-        reach_playing(&mut s, 0);
-        // seq 0=session_open, 1=first_frame; next heartbeat should be seq=2
-        let beacons = s.tick(10_000);
-        assert_eq!(beacons[0].seq, 2);
+        reach_playing(&mut s, 0); // seq 0=play, 1=first_frame, 2=playing (all at t=1000)
+        // Heartbeat fires 10s after last beacon (playing at t=1000) → t=11000
+        let beacons = s.tick(11_000);
+        assert_eq!(beacons[0].seq, 3);
     }
 
     // ── Beacon serialization ─────────────────────────────────────────────────
@@ -1043,7 +1067,7 @@ mod tests {
         let json = miniserde::json::to_string(b);
         assert!(!json.contains("\"state\""));
         assert!(!json.contains("\"metrics\""));
-        assert!(json.contains("\"event\":\"session_open\""));
+        assert!(json.contains("\"event\":\"play\""));
         assert!(json.contains("\"video\""));
         assert!(json.contains("\"client\""));
         assert!(json.contains("\"sdk\""));
@@ -1056,6 +1080,7 @@ mod tests {
         s.process_event(PlayerEvent::CanPlay, 0);
         s.process_event(PlayerEvent::Play, 1_708_646_400_000);
         let beacons = s.process_event(PlayerEvent::FirstFrame, 1_708_646_401_280);
+        // beacons[0] = first_frame, beacons[1] = playing
         let b = &beacons[0];
         let json = miniserde::json::to_string(b);
         // Should have state and metrics but NOT video/client/sdk
@@ -1068,9 +1093,9 @@ mod tests {
     #[test]
     fn heartbeat_beacon_includes_playhead_ms() {
         let mut s = make_session();
-        reach_playing(&mut s, 0);
+        reach_playing(&mut s, 0); // last beacon at t=1000
         s.set_playhead(10_000);
-        let beacons = s.tick(10_000);
+        let beacons = s.tick(11_000); // 10s after last beacon
         let json = miniserde::json::to_string(&beacons[0]);
         assert!(json.contains("\"playhead_ms\":10000"));
         assert!(!json.contains("\"seek_from_ms\""));
@@ -1087,13 +1112,13 @@ mod tests {
     }
 
     #[test]
-    fn destroy_from_playing_emits_session_end() {
+    fn destroy_from_playing_emits_ended() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         let beacons = s.destroy(8000);
         assert_eq!(s.state(), PlayerState::Idle);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Ended);
     }
 
     #[test]
@@ -1107,11 +1132,11 @@ mod tests {
     #[test]
     fn seq_resets_on_new_session() {
         let mut s = make_session();
-        let all1 = reach_playing(&mut s, 0); // 2 beacons (seq 0,1)
-        assert_eq!(all1.last().unwrap().seq, 1);
+        let all1 = reach_playing(&mut s, 0); // 3 beacons (seq 0=play, 1=first_frame, 2=playing)
+        assert_eq!(all1.last().unwrap().seq, 2);
         s.process_event(PlayerEvent::Ended, 5000);
         // Replay
-        s.process_event(PlayerEvent::Play, 6000); // new session_open → seq=0
+        s.process_event(PlayerEvent::Play, 6000); // new play → seq=0
         assert_eq!(s.seq, 1); // next seq will be 1
     }
 
@@ -1304,14 +1329,14 @@ mod tests {
     }
 
     #[test]
-    fn paused_destroy_via_process_event_emits_session_end() {
+    fn paused_destroy_via_process_event_emits_ended() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 5000);
         let beacons = s.process_event(PlayerEvent::Destroy, 8000);
         assert_eq!(s.state(), PlayerState::Idle);
         assert_eq!(beacons.len(), 1);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Ended);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.watched_ms, 8000);
     }
@@ -1390,18 +1415,18 @@ mod tests {
     #[test]
     fn multiple_heartbeats_have_incrementing_seq() {
         let mut s = make_session();
-        reach_playing(&mut s, 0); // seq 0, 1
-        let h1 = s.tick(10_000);
-        let h2 = s.tick(20_000);
+        reach_playing(&mut s, 0); // seq 0,1,2; last beacon at t=1000
+        let h1 = s.tick(11_000); // 10s after last beacon → heartbeat, last=11000
+        let h2 = s.tick(21_000); // 10s after h1 → heartbeat
         assert_eq!(h1[0].seq + 1, h2[0].seq);
     }
 
     #[test]
     fn heartbeat_metrics_advance_with_time() {
         let mut s = make_session();
-        reach_playing(&mut s, 0); // first_frame at t=1000
-        let h1 = s.tick(10_000);
-        let h2 = s.tick(20_000);
+        reach_playing(&mut s, 0); // first_frame at t=1000; last_heartbeat_ms=1000
+        let h1 = s.tick(11_000); // 10s after last beacon
+        let h2 = s.tick(21_000); // 10s after h1
         let m1 = h1[0].metrics.as_ref().unwrap();
         let m2 = h2[0].metrics.as_ref().unwrap();
         assert!(m2.played_ms > m1.played_ms, "played_ms should grow: {} > {}", m2.played_ms, m1.played_ms);
@@ -1446,21 +1471,21 @@ mod tests {
     fn rebuffer_sample_fixture_shape() {
         // Mirrors docs/beacon-payload.samples.json "rebuffer" batch shape.
         let mut s = make_session();
-        let all = reach_playing(&mut s, 0); // seq=0 session_open, seq=1 first_frame
+        let all = reach_playing(&mut s, 0); // seq=0 play, seq=1 first_frame, seq=2 playing
         let _ = all;
 
-        // rebuffer_start (seq=2)
+        // stall (seq=3)
         let bs = s.process_event(PlayerEvent::Stall, 15_000);
-        assert_eq!(bs[0].event, BeaconEvent::RebufferStart);
-        assert_eq!(bs[0].seq, 2);
+        assert_eq!(bs[0].event, BeaconEvent::Stall);
+        assert_eq!(bs[0].seq, 3);
         let m = bs[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_count, 1);
         assert_eq!(m.rebuffer_ms, 0); // just started
 
-        // rebuffer_end 2100ms later (seq=3)
+        // playing 2100ms later (seq=4) — stall recovery
         let bs = s.process_event(PlayerEvent::Playing, 17_100);
-        assert_eq!(bs[0].event, BeaconEvent::RebufferEnd);
-        assert_eq!(bs[0].seq, 3);
+        assert_eq!(bs[0].event, BeaconEvent::Playing);
+        assert_eq!(bs[0].seq, 4);
         assert_eq!(bs[0].state, Some(PlayerState::Playing));
         let m = bs[0].metrics.as_ref().unwrap();
         assert_eq!(m.rebuffer_ms, 2100);
@@ -1472,22 +1497,22 @@ mod tests {
     fn seek_sample_fixture_shape() {
         // Mirrors docs/beacon-payload.samples.json "seek" batch shape.
         let mut s = make_session();
-        reach_playing(&mut s, 0); // seq=0, seq=1
+        reach_playing(&mut s, 0); // seq=0 play, seq=1 first_frame, seq=2 playing
 
-        // seek_start (seq=2)
+        // seek_start (seq=3)
         let bs = s.process_event(PlayerEvent::SeekStart { from_ms: 20_580 }, 22_100);
         assert_eq!(bs[0].event, BeaconEvent::SeekStart);
-        assert_eq!(bs[0].seq, 2);
+        assert_eq!(bs[0].seq, 3);
         assert_eq!(bs[0].seek_from_ms, Some(20_580));
         assert!(bs[0].seek_to_ms.is_none());
 
-        // seek_end (seq=3) resolves to playing with buffer ready
+        // seek_end (seq=4) resolves to playing with buffer ready
         let bs = s.process_event(
             PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: true },
             22_480,
         );
         assert_eq!(bs[0].event, BeaconEvent::SeekEnd);
-        assert_eq!(bs[0].seq, 3);
+        assert_eq!(bs[0].seq, 4);
         assert_eq!(bs[0].seek_from_ms, Some(20_580));
         assert_eq!(bs[0].seek_to_ms, Some(60_000));
         assert_eq!(bs[0].state, Some(PlayerState::Playing));
@@ -1499,7 +1524,7 @@ mod tests {
         let mut s = make_session();
         reach_playing(&mut s, 0); // first_frame at t=1000
         let bs = s.process_event(PlayerEvent::Ended, 120_000);
-        assert_eq!(bs[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(bs[0].event, BeaconEvent::Completed);
         assert_eq!(bs[0].state, Some(PlayerState::Ended));
         let m = bs[0].metrics.as_ref().unwrap();
         assert!(m.vst_ms.is_some());
@@ -1543,39 +1568,39 @@ mod tests {
         s.process_event(PlayerEvent::Stall, 5_000);
         s.set_playhead(8_000);
         let beacons = s.process_event(PlayerEvent::Pause, 8_000);
-        // beacons[0] = rebuffer_end, beacons[1] = pause
+        // beacons[0] = playing (stall recovery), beacons[1] = pause
         assert_eq!(beacons[1].event, BeaconEvent::Pause);
         assert_eq!(beacons[1].playhead_ms, Some(8_000));
     }
 
     #[test]
-    fn natural_end_session_end_includes_playhead_ms() {
+    fn natural_end_completed_includes_playhead_ms() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.set_playhead(120_000);
         let beacons = s.process_event(PlayerEvent::Ended, 120_000);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Completed);
         assert_eq!(beacons[0].playhead_ms, Some(120_000));
     }
 
     #[test]
-    fn paused_destroy_session_end_includes_playhead_ms() {
+    fn paused_destroy_ended_includes_playhead_ms() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 5_000);
         s.set_playhead(30_000);
         let beacons = s.process_event(PlayerEvent::Destroy, 30_000);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Ended);
         assert_eq!(beacons[0].playhead_ms, Some(30_000));
     }
 
     #[test]
-    fn force_destroy_session_end_includes_playhead_ms() {
+    fn force_destroy_ended_includes_playhead_ms() {
         let mut s = make_session();
         reach_playing(&mut s, 0);
         s.set_playhead(15_000);
         let beacons = s.destroy(15_000);
-        assert_eq!(beacons[0].event, BeaconEvent::SessionEnd);
+        assert_eq!(beacons[0].event, BeaconEvent::Ended);
         assert_eq!(beacons[0].playhead_ms, Some(15_000));
     }
 
@@ -1591,9 +1616,9 @@ mod tests {
     #[test]
     fn heartbeat_still_includes_playhead_ms_regression() {
         let mut s = make_session();
-        reach_playing(&mut s, 0);
+        reach_playing(&mut s, 0); // last beacon at t=1000
         s.set_playhead(7_000);
-        let beacons = s.tick(10_000);
+        let beacons = s.tick(11_000); // 10s after last beacon
         assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
         assert_eq!(beacons[0].playhead_ms, Some(7_000));
     }
@@ -1617,31 +1642,31 @@ mod tests {
         let mut s = make_session();
         let mut all: Vec<Beacon> = Vec::new();
 
-        // Load → CanPlay → Play (session_open)
+        // Load → CanPlay → Play (play beacon — session opens)
         all.extend(s.process_event(PlayerEvent::Load { src: "http://example.com/v.m3u8".into() }, 0));
         all.extend(s.process_event(PlayerEvent::CanPlay, 100));
         all.extend(s.process_event(PlayerEvent::Play, 200));
-        // session_open: seq=0, no state, no metrics
-        assert_eq!(all[0].event, BeaconEvent::SessionOpen);
+        // play: seq=0, no state, no metrics
+        assert_eq!(all[0].event, BeaconEvent::Play);
         assert_eq!(all[0].seq, 0);
         assert!(all[0].state.is_none());
         assert!(all[0].metrics.is_none());
 
         let play_id = all[0].play_id.clone();
 
-        // FirstFrame → Playing (first_frame, seq=1)
+        // FirstFrame → first_frame (seq=1) + playing (seq=2)
         all.extend(s.process_event(PlayerEvent::FirstFrame, 1_200));
-        // Pause → Paused (pause, seq=2)
+        // Pause → Paused (pause, seq=3)
         all.extend(s.process_event(PlayerEvent::Pause, 5_000));
-        // Resume → PlayAttempt (play, seq=3)
+        // Resume → PlayAttempt (playing, seq=4)
         all.extend(s.process_event(PlayerEvent::Play, 8_000));
-        // Playing → Playing (no beacon — resume, not first_frame)
+        // Playing from PlayAttempt (no beacon — vst_ms already set)
         all.extend(s.process_event(PlayerEvent::Playing, 8_100));
-        // SeekStart (seek_start, seq=4)
+        // SeekStart (seek_start, seq=5)
         all.extend(s.process_event(PlayerEvent::SeekStart { from_ms: 10_000 }, 11_000));
-        // SeekEnd buffer_ready → Playing (seek_end, seq=5)
+        // SeekEnd buffer_ready → Playing (seek_end, seq=6)
         all.extend(s.process_event(PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: true }, 11_400));
-        // Ended → session_end (seq=6)
+        // Ended → completed (seq=7)
         all.extend(s.process_event(PlayerEvent::Ended, 120_000));
 
         // Verify monotonically increasing seq
@@ -1671,13 +1696,13 @@ mod tests {
         let beacons = s.process_event(PlayerEvent::Play, 0);
         let b = &beacons[0];
 
-        assert_eq!(b.event, BeaconEvent::SessionOpen);
+        assert_eq!(b.event, BeaconEvent::Play);
         assert!(b.video.is_some(), "video must be present");
         assert!(b.client.is_some(), "client must be present");
         assert!(b.sdk.is_some(), "sdk must be present");
-        assert!(b.state.is_none(), "state must be absent on session_open");
-        assert!(b.metrics.is_none(), "metrics must be absent on session_open");
-        assert!(b.playhead_ms.is_none(), "playhead_ms must be absent on session_open");
+        assert!(b.state.is_none(), "state must be absent on play (session open)");
+        assert!(b.metrics.is_none(), "metrics must be absent on play (session open)");
+        assert!(b.playhead_ms.is_none(), "playhead_ms must be absent on play (session open)");
     }
 
     // ── get_playhead ──────────────────────────────────────────────────────────
@@ -1700,11 +1725,11 @@ mod tests {
     #[test]
     fn get_playhead_is_included_in_heartbeat_via_set_then_get() {
         let mut s = make_session();
-        reach_playing(&mut s, 0);
+        reach_playing(&mut s, 0); // last beacon at t=1000
         s.set_playhead(10_000);
         assert_eq!(s.get_playhead(), 10_000);
-        // Heartbeat should also carry this value.
-        let beacons = s.tick(10_000);
+        // Heartbeat fires 10s after last beacon (first_frame at t=1000).
+        let beacons = s.tick(11_000);
         let json = miniserde::json::to_string(&beacons[0]);
         assert!(json.contains("\"playhead_ms\":10000"));
     }

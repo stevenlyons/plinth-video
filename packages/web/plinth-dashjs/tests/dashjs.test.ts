@@ -40,6 +40,7 @@ class FakePlayer {
 
 class FakeVideo extends EventTarget {
   currentTime = 0;
+  paused = true;
   ended = false;
   buffered = { length: 0, start: (_i: number) => 0, end: (_i: number) => 0 } as unknown as TimeRanges;
   error: { code: number; message?: string } | null = null;
@@ -128,6 +129,16 @@ describe("PlinthDashjs", () => {
     player.fire("streamInitialized");
 
     assertCalledWith(mockSession.processEvent, { type: "can_play" });
+  });
+
+  // 2b. STREAM_INITIALIZED while video already playing (autostart) → can_play then play
+  it("STREAM_INITIALIZED while video not paused → can_play then play", async () => {
+    instance = await setup(player, video, mockSession);
+    video.paused = false;
+    player.fire("streamInitialized");
+
+    const calls = mockSession.processEvent.mock.calls.map((c) => c.arguments[0]);
+    assert.deepStrictEqual(calls, [{ type: "can_play" }, { type: "play" }]);
   });
 
   // 3
@@ -291,7 +302,7 @@ describe("PlinthDashjs", () => {
         bitrate_bps: 2_500_000,
         width: 1280,
         height: 720,
-        framerate: 29.97,
+        framerate: "29.97",
         codec: "avc1.4d401f",
       },
     });

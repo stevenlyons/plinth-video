@@ -27,13 +27,13 @@ All metrics are computed server-side. No new SDK events are required.
 
 | Metric | Definition | Derived From |
 |---|---|---|
-| **Attempted Plays** | Times a viewer pressed play | Count of `session_open` beacons per `video.id` |
+| **Attempted Plays** | Times a viewer pressed play | Count of `play` beacons per `video.id` |
 | **Plays** | Times a video actually started | Count of `first_frame` beacons per `video.id` |
-| **Watches** | Sessions where viewer watched ≥ threshold of video | Count of `session_end` beacons where `metrics.played_ms / video.duration_ms ≥ threshold` (e.g. 0.75). Requires `duration_ms`. |
-| **Playback Time** | Total time video was actively playing | Sum of `metrics.played_ms` from `session_end` beacons |
-| **Watch Time** | Total time viewers spent in sessions | Sum of `metrics.watched_ms` from `session_end` beacons |
-| **Viewers** | Viewer sessions that attempted to play | Count of `session_open` beacons per `video.id` |
-| **Unique Viewers** | Distinct viewers in a time range | Count of distinct `client.viewer_id` values in `session_open` beacons per `video.id` and time range |
+| **Watches** | Sessions where viewer watched ≥ threshold of video | Count of `completed` beacons where `metrics.played_ms / video.duration_ms ≥ threshold` (e.g. 0.75). Requires `duration_ms`. |
+| **Playback Time** | Total time video was actively playing | Sum of `metrics.played_ms` from `completed` beacons |
+| **Watch Time** | Total time viewers spent in sessions | Sum of `metrics.watched_ms` from `completed` beacons |
+| **Viewers** | Viewer sessions that attempted to play | Count of `play` beacons per `video.id` |
+| **Unique Viewers** | Distinct viewers in a time range | Count of distinct `client.viewer_id` values in `play` beacons per `video.id` and time range |
 
 ---
 
@@ -90,7 +90,7 @@ Layer 2 PlinthSession.create(meta)
   → JSON.stringify(meta) → WasmSession / FFI / JNI
     ↓
 Layer 1 Session::new(meta)
-  → session_open beacon: video.duration_ms (if Some), client.viewer_id (if Some)
+  → play beacon: video.duration_ms (if Some), client.viewer_id (if Some)
 ```
 
 ---
@@ -499,7 +499,7 @@ fun initialize(
 
 | # | Test | Assertion |
 |---|---|---|
-| 1 | `duration_ms_serialized_in_session_open` | `VideoMetadata { duration_ms: Some(7_200_000), .. }`; serialize; assert `"duration_ms":7200000` in JSON |
+| 1 | `duration_ms_serialized_in_play_beacon` | `VideoMetadata { duration_ms: Some(7_200_000), .. }`; serialize; assert `"duration_ms":7200000` in JSON |
 | 2 | `duration_ms_absent_when_none` | `VideoMetadata { duration_ms: None, .. }`; serialize; assert key absent |
 | 3 | `viewer_id_serialized_when_some` | `ClientMetadata { viewer_id: Some("v_abc".into()), .. }`; serialize; assert `"viewer_id":"v_abc"` |
 | 4 | `viewer_id_absent_when_none` | `ClientMetadata { viewer_id: None, .. }`; serialize; assert `"viewer_id"` key absent |
@@ -520,11 +520,11 @@ fun initialize(
 
 | # | Test | Assertion |
 |---|---|---|
-| 12 | `session_open_has_viewer_id_by_default` | Create session without specifying `viewer_id`; assert `meta.client.viewer_id` is a non-empty string |
-| 13 | `session_open_uses_override_when_provided` | Session with `viewer_id: "u1"` in meta; assert `client.viewer_id === "u1"` |
-| 14 | `session_open_omits_viewer_id_when_null` | Session with `viewer_id: null`; assert `"viewer_id"` key absent from beacon JSON |
-| 15 | `session_open_includes_duration_ms` | Session with `video: { duration_ms: 60000 }`; assert `video.duration_ms === 60000` |
-| 16 | `session_open_omits_duration_ms_when_absent` | No `duration_ms`; assert key absent |
+| 12 | `play_beacon_has_viewer_id_by_default` | Create session without specifying `viewer_id`; assert `meta.client.viewer_id` is a non-empty string |
+| 13 | `play_beacon_uses_override_when_provided` | Session with `viewer_id: "u1"` in meta; assert `client.viewer_id === "u1"` |
+| 14 | `play_beacon_omits_viewer_id_when_null` | Session with `viewer_id: null`; assert `"viewer_id"` key absent from beacon JSON |
+| 15 | `play_beacon_includes_duration_ms` | Session with `video: { duration_ms: 60000 }`; assert `video.duration_ms === 60000` |
+| 16 | `play_beacon_omits_duration_ms_when_absent` | No `duration_ms`; assert key absent |
 
 ### `packages/web/plinth-hlsjs`
 
@@ -550,10 +550,10 @@ fun initialize(
 
 | # | Test | Assertion |
 |---|---|---|
-| 27 | `session_open_has_viewer_id_by_default` | Create session with `.auto`; assert `client.viewer_id` is non-empty in beacon |
-| 28 | `session_open_omits_viewer_id_when_disabled` | Create session with `.disabled`; assert `"viewer_id"` key absent from beacon |
-| 29 | `session_open_includes_duration_ms` | `VideoMetadata(durationMs: 120_000)`; assert `"duration_ms":120000` in beacon |
-| 30 | `session_open_omits_duration_ms_when_nil` | No `durationMs`; assert key absent |
+| 27 | `play_beacon_has_viewer_id_by_default` | Create session with `.auto`; assert `client.viewer_id` is non-empty in beacon |
+| 28 | `play_beacon_omits_viewer_id_when_disabled` | Create session with `.disabled`; assert `"viewer_id"` key absent from beacon |
+| 29 | `play_beacon_includes_duration_ms` | `VideoMetadata(durationMs: 120_000)`; assert `"duration_ms":120000` in beacon |
+| 30 | `play_beacon_omits_duration_ms_when_nil` | No `durationMs`; assert key absent |
 
 ### `packages/android/plinth-android` — `ViewerId.kt`
 

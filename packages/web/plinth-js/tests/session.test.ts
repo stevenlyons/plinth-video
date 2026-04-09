@@ -24,7 +24,7 @@ const DEFAULT_CONFIG: PlinthConfig = {
 
 const EMPTY_BATCH = JSON.stringify({ beacons: [] });
 const BEACON_BATCH = JSON.stringify({
-  beacons: [{ seq: 0, play_id: "abc-123", ts: 1000, event: "session_open" }],
+  beacons: [{ seq: 0, play_id: "abc-123", ts: 1000, event: "play" }],
 });
 
 function makeMockWasmSession(): WasmSessionLike & {

@@ -2,6 +2,8 @@ import Hls, { Events } from "hls.js";
 import { PlinthSession } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
+export const VERSION = "0.2.0";
+
 export interface VideoMeta {
   id: string;
   title?: string;
@@ -29,6 +31,7 @@ export class PlinthHlsJs {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
+  private isSeeking = false;
   private destroyed = false;
   private hlsHandlers = new Map<string, HlsHandler>();
   private videoHandlers = new Map<string, EventListener>();
@@ -103,6 +106,9 @@ export class PlinthHlsJs {
 
     const onManifestParsed: HlsHandler = () => {
       this.emit({ type: "can_play" });
+      if (!this.video.paused) {
+        this.emit({ type: "play" });
+      }
     };
     this.hls.on(Events.MANIFEST_PARSED, onManifestParsed as any);
     this.hlsHandlers.set(Events.MANIFEST_PARSED, onManifestParsed);
@@ -157,8 +163,13 @@ export class PlinthHlsJs {
     this.video.addEventListener("playing", onPlaying);
     this.videoHandlers.set("playing", onPlaying);
 
-    const onWaiting: EventListener = () =>
-      this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
+    const onWaiting: EventListener = () => {
+      if (this.hasFiredFirstFrame && !this.isSeeking) {
+        this.emit({ type: "stall" });
+      } else if (!this.hasFiredFirstFrame) {
+        this.emit({ type: "waiting" });
+      }
+    };
     this.video.addEventListener("waiting", onWaiting);
     this.videoHandlers.set("waiting", onWaiting);
 
@@ -170,12 +181,14 @@ export class PlinthHlsJs {
     this.videoHandlers.set("pause", onPause);
 
     const onSeeking: EventListener = () => {
+      this.isSeeking = true;
       this.emit({ type: "seek_start", from_ms: this.lastPlayheadMs });
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
+      this.isSeeking = false;
       this.emit({
         type: "seek_end",
         to_ms: this.video.currentTime * 1000,

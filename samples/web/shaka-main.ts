@@ -1,6 +1,9 @@
 import shaka from "shaka-player";
-import { PlinthShaka } from "@wirevice/plinth-shaka";
-import { setupDemo } from "./demo-shell.js";
+import { PlinthShaka, VERSION } from "@wirevice/plinth-shaka";
+import { VERSION as JS_VERSION } from "@wirevice/plinth-js";
+import { setupDemo, showVersions } from "./demo-shell.js";
+
+showVersions({ "plinth-shaka": VERSION, "plinth-js": JS_VERSION, "shaka-player": shaka.Player.version });
 
 setupDemo(async (url, video, sessionFactory) => {
   shaka.polyfill.installAll();

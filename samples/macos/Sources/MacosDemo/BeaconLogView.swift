@@ -57,13 +57,15 @@ struct BeaconLogView: View {
 
     private func color(for event: String) -> Color {
         switch event {
-        case "session_open":  return .blue
+        case "play":          return .blue
         case "first_frame":   return .green
-        case "session_end":   return .orange
+        case "playing":       return .mint
+        case "ended":         return .orange
+        case "completed":     return .orange
         case "error":         return .red
         case "heartbeat":     return .secondary
-        case _ where event.hasPrefix("rebuffer"): return .yellow
-        case _ where event.hasPrefix("seek"):     return .purple
+        case "stall":         return .yellow
+        case _ where event.hasPrefix("seek"): return .purple
         default:              return .primary
         }
     }

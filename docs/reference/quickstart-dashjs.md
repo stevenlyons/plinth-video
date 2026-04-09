@@ -78,28 +78,30 @@ See `packages/web/plinth-dashjs/tests/dashjs.test.ts` for examples using a fake 
 
 ## Events mapped
 
-| dash.js / video event              | Core `PlayerEvent`                                      |
-|------------------------------------|---------------------------------------------------------|
-| `MANIFEST_LOADING_STARTED`         | `load` (src from `player.getSource()`)                  |
-| `STREAM_INITIALIZED`               | `can_play`                                              |
-| `PLAYBACK_STALLED`                 | `waiting` (buffer stall)                                |
-| `BUFFER_LOADED`                    | `can_play_through` (buffer recovered)                   |
-| `PLAYBACK_STARTED` (first time)    | `first_frame` — sets `hasFiredFirstFrame`               |
-| `PLAYBACK_STARTED` (subsequent)    | no-op                                                   |
-| `QUALITY_CHANGE_RENDERED`          | `quality_change`                                        |
-| `ERROR`                            | `error` (all dash.js errors are treated as fatal)       |
-| `<video> play`                     | `play`                                                  |
-| `<video> pause`                    | `pause`                                                 |
-| `<video> seeking`                  | `seek_start`                                            |
-| `<video> seeked`                   | `seek_end`                                              |
-| `<video> ended`                    | `ended`                                                 |
-| `<video> timeupdate`               | updates playhead (heartbeat data)                       |
-| `<video> error`                    | `error` (fatal, codec / decode errors)                  |
+| dash.js / video event                        | Core `PlayerEvent`                                                       |
+|----------------------------------------------|--------------------------------------------------------------------------|
+| `MANIFEST_LOADING_STARTED`                   | `load` (src from `player.getSource()`); resets `hasFiredFirstFrame`      |
+| `STREAM_INITIALIZED`                         | `can_play`                                                               |
+| `PLAYBACK_STALLED` (before first frame)      | `waiting` — initial buffer stall (PlayAttempt → Buffering)               |
+| `PLAYBACK_STALLED` (after first frame)       | `stall` — mid-playback stall (Playing → Rebuffering)                     |
+| `BUFFER_LOADED`                              | `playing` — buffer recovered; drives Buffering/Rebuffering → Playing     |
+| `PLAYBACK_STARTED` (first time)              | `first_frame` — sets `hasFiredFirstFrame`                                |
+| `PLAYBACK_STARTED` (subsequent)              | no-op (`BUFFER_LOADED` already fired `playing` for recovery)             |
+| `QUALITY_CHANGE_RENDERED`                    | `quality_change`                                                         |
+| `ERROR`                                      | `error` (all dash.js errors are treated as fatal)                        |
+| `<video> play`                               | `play`                                                                   |
+| `<video> pause`                              | `pause` — suppressed when `video.ended` is true                          |
+| `<video> seeking`                            | `seek_start`                                                             |
+| `<video> seeked`                             | `seek_end`                                                               |
+| `<video> ended`                              | `ended`                                                                  |
+| `<video> timeupdate`                         | updates playhead (heartbeat data)                                        |
+| `<video> error`                              | `error` (fatal, codec / decode errors)                                   |
 
 ### Key differences from Hls.js and Shaka
 
 - **No auto-destroy**: dash.js has no equivalent of `DESTROYING` (Hls.js) or `unloading` (Shaka). Always call `plinth.destroy()` explicitly before releasing the player.
 - **First frame via player event**: `first_frame` is fired from the dash.js `PLAYBACK_STARTED` event (with `hasFiredFirstFrame` guard), not from `<video> playing`.
-- **Buffer recovery via `BUFFER_LOADED`**: emits `can_play_through`, which drives the `Rebuffering → Playing` state transition.
+- **`stall` vs `waiting`**: `PLAYBACK_STALLED` maps to `waiting` before the first frame and `stall` after. The `hasFiredFirstFrame` flag (reset on each `MANIFEST_LOADING_STARTED`) distinguishes the two.
+- **Buffer recovery via `BUFFER_LOADED`**: emits `playing`, which drives the `Buffering/Rebuffering → Playing` transition.
 - **All errors are fatal**: dash.js surfaces errors without a severity field; all `ERROR` events emit `fatal: true`.
 - **Quality dedup**: `QUALITY_CHANGE_RENDERED` fires on every segment switch. The integration deduplicates by comparing `bandwidth` against the previous emission so identical-bitrate switches don't produce spurious events.

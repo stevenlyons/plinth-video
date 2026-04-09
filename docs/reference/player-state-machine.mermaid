@@ -23,6 +23,28 @@ stateDiagram-v2
     %%  Error        Fatal, unrecoverable player error.
     %%
     %%  WATCHED TIME spans all states from PlayAttempt until Ended or destroy().
+    %%
+    %% ── Beacon Emissions ──────────────────────────────────────────────────────
+    %%
+    %%  Transition                                  Beacon(s) emitted
+    %%  ──────────────────────────────────────────  ──────────────────────────────────────────────
+    %%  Ready → PlayAttempt [play()]                play  (seq=0; no state/metrics; carries video/client/sdk)
+    %%  Ended → PlayAttempt [play() replay]         play  (seq=0; new session, new play_id)
+    %%  PlayAttempt|Buffering → Playing [firstFrame] first_frame  +  playing  (same timestamp; VST now known)
+    %%  Playing → Paused [pause()]                  pause
+    %%  Playing → Seeking [seekStart]               seek_start
+    %%  Playing → Rebuffering [stall]               stall
+    %%  Playing → Ended [ended event]               completed
+    %%  Playing → Error                             error
+    %%  Paused → PlayAttempt [play()]               playing  (resume; same session)
+    %%  Seeking → Playing|Rebuffering|Paused        seek_end  (+ stall if seekEnd lands in Rebuffering)
+    %%  Rebuffering → Playing [playing event]       playing  (stall recovery)
+    %%  Rebuffering → Paused [pause()]              playing  +  pause
+    %%  Rebuffering → Seeking [seekStart]           playing  +  seek_start
+    %%  Any active state [destroy()]                ended
+    %%  Any active state [heartbeat tick]           heartbeat  (when silent for heartbeat_interval_ms)
+    %%
+    %%  "Active" states: PlayAttempt, Buffering, Playing, Paused, Seeking, Rebuffering.
 
     [*] --> Idle : init
 

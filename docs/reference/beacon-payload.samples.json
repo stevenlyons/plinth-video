@@ -1,14 +1,14 @@
 {
   "_comment": "Sample beacon batches illustrating a complete play session lifecycle. All ts values are Unix epoch milliseconds (absolute).",
 
-  "session_open": {
-    "_label": "Batch 1 — sent at play() call. seq=0 is always session_open.",
+  "play": {
+    "_label": "Batch 1 — sent at play() call. seq=0 is always play (session open).",
     "beacons": [
       {
         "seq": 0,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646400000,
-        "event": "session_open",
+        "event": "play",
         "video": {
           "id": "bbb-720p",
           "title": "Big Buck Bunny"
@@ -18,16 +18,16 @@
         },
         "sdk": {
           "api_version": 1,
-          "core":      { "name": "vqe-core",  "version": "0.1.0" },
-          "framework": { "name": "vqe-web",   "version": "0.1.0" },
-          "player":    { "name": "vqe-hlsjs", "version": "0.1.0" }
+          "core":      { "name": "plinth-core",  "version": "0.1.0" },
+          "framework": { "name": "plinth-js",    "version": "0.1.0" },
+          "player":    { "name": "plinth-hlsjs", "version": "0.1.0" }
         }
       }
     ]
   },
 
   "first_frame_and_quality": {
-    "_label": "Batch 2 — flushed after first frame renders (~1.3s after play()). VST is now known.",
+    "_label": "Batch 2 — flushed after first frame renders (~1.3s after play()). VST is now known. first_frame and playing are emitted at the same timestamp; quality_change follows.",
     "beacons": [
       {
         "seq": 1,
@@ -47,6 +47,21 @@
       {
         "seq": 2,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ts": 1708646401280,
+        "event": "playing",
+        "state": "playing",
+        "metrics": {
+          "vst_ms": 1280,
+          "played_ms": 0,
+          "rebuffer_ms": 0,
+          "watched_ms": 1280,
+          "rebuffer_count": 0,
+          "error_count": 0
+        }
+      },
+      {
+        "seq": 3,
+        "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646401310,
         "event": "quality_change",
         "state": "playing",
@@ -54,7 +69,7 @@
           "bitrate_bps": 2500000,
           "width": 1280,
           "height": 720,
-          "framerate": 29.97,
+          "framerate": "29.97",
           "codec": "avc1.4d401f"
         },
         "metrics": {
@@ -70,10 +85,10 @@
   },
 
   "heartbeat": {
-    "_label": "Batch 3 — periodic heartbeat at 10s interval. Player has been playing smoothly.",
+    "_label": "Batch 3 — keepalive heartbeat. No other beacon has been sent for 10s; player has been playing smoothly.",
     "beacons": [
       {
-        "seq": 3,
+        "seq": 4,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646411280,
         "event": "heartbeat",
@@ -92,13 +107,13 @@
   },
 
   "rebuffer": {
-    "_label": "Batch 4 — rebuffer at ~15s. Two beacons: rebuffer_start then rebuffer_end after 2.1s stall.",
+    "_label": "Batch 4 — stall at ~15s. Two beacons: stall then playing (stall recovery) after 2.1s.",
     "beacons": [
       {
-        "seq": 4,
+        "seq": 5,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646415420,
-        "event": "rebuffer_start",
+        "event": "stall",
         "state": "rebuffering",
         "metrics": {
           "vst_ms": 1280,
@@ -110,10 +125,10 @@
         }
       },
       {
-        "seq": 5,
+        "seq": 6,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646417520,
-        "event": "rebuffer_end",
+        "event": "playing",
         "state": "playing",
         "metrics": {
           "vst_ms": 1280,
@@ -131,7 +146,7 @@
     "_label": "Batch 5 — user seeks forward while playing. seek_end lands back in playing state.",
     "beacons": [
       {
-        "seq": 6,
+        "seq": 7,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646422100,
         "event": "seek_start",
@@ -147,7 +162,7 @@
         }
       },
       {
-        "seq": 7,
+        "seq": 8,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646422480,
         "event": "seek_end",
@@ -166,15 +181,16 @@
     ]
   },
 
-  "session_end": {
+  "completed": {
     "_label": "Batch N — video reaches natural end. Final metrics snapshot.",
     "beacons": [
       {
         "seq": 24,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646996210,
-        "event": "session_end",
+        "event": "completed",
         "state": "ended",
+        "playhead_ms": 570000,
         "metrics": {
           "vst_ms": 1280,
           "played_ms": 570400,

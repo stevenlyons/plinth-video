@@ -88,7 +88,7 @@ let factory: AVPlayerSessionFactory = options.sessionFactory ?? { meta, config i
 Use a fake/stub player that lets you fire events programmatically. Inject a mock session via `sessionFactory`. Verify that:
 
 - The correct `PlayerEvent` is sent for each player event
-- The full `load → can_play → play → first_frame` path emits `session_open` + `first_frame`
+- The full `load → can_play → play → first_frame` path emits `play` + `first_frame` + `playing`
 - `destroy` is idempotent and cleans up all listeners
 - Seek events bracket correctly (`seek_start` before `seek_end`)
 

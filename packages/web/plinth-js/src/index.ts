@@ -1,4 +1,6 @@
 import { postBeacons } from "./poster.js";
+
+export const VERSION = "0.2.0";
 import type {
   BeaconBatch,
   PlinthConfig,
@@ -59,9 +61,9 @@ export class PlinthSession {
     return session;
   }
 
-  /** Send a player event to the state machine. Posts any resulting beacons. */
-  processEvent(event: PlayerEvent): void {
-    if (this.destroyed) return;
+  /** Send a player event to the state machine. Posts any resulting beacons. Returns the batch. */
+  processEvent(event: PlayerEvent): BeaconBatch {
+    if (this.destroyed) return { beacons: [] };
     const batchJson = this.wasmSession.process_event(
       JSON.stringify(event),
       Date.now(),
@@ -70,6 +72,7 @@ export class PlinthSession {
     if (batch.beacons.length > 0) {
       void postBeacons(this.config.endpoint, this.config.project_key, batchJson);
     }
+    return batch;
   }
 
   /** Update the platform-reported playhead position (used in heartbeat beacons). */
@@ -100,19 +103,26 @@ export class PlinthSession {
     this.wasmSession.free();
   }
 
+  /**
+   * Called by the heartbeat timer. Returns true if a heartbeat beacon was sent.
+   * Exposed so integrations can wrap it for logging or observability.
+   */
+  tick(): boolean {
+    if (this.destroyed) return false;
+    const batchJson = this.wasmSession.tick(Date.now());
+    const batch = JSON.parse(batchJson) as BeaconBatch;
+    if (batch.beacons.length > 0) {
+      void postBeacons(this.config.endpoint, this.config.project_key, batchJson);
+      return true;
+    }
+    return false;
+  }
+
   private startHeartbeat(): void {
-    this.timerHandle = setInterval(() => {
-      if (this.destroyed) return;
-      const batchJson = this.wasmSession.tick(Date.now());
-      const batch = JSON.parse(batchJson) as BeaconBatch;
-      if (batch.beacons.length > 0) {
-        void postBeacons(
-          this.config.endpoint,
-          this.config.project_key,
-          batchJson,
-        );
-      }
-    }, this.config.heartbeat_interval_ms);
+    this.timerHandle = setInterval(
+      () => this.tick(),
+      Math.min(1000, this.config.heartbeat_interval_ms),
+    );
   }
 
   private stopHeartbeat(): void {

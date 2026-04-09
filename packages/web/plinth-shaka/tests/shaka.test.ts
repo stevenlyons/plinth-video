@@ -45,6 +45,7 @@ class FakePlayer extends EventTarget {
 
 class FakeVideo extends EventTarget {
   currentTime = 0;
+  paused = true;
   ended = false;
   buffered = { length: 0, start: (_i: number) => 0, end: (_i: number) => 0 } as unknown as TimeRanges;
   error: { code: number; message?: string } | null = null;
@@ -133,6 +134,16 @@ describe("PlinthShaka", () => {
     player.fireLoaded();
 
     assertCalledWith(mockSession.processEvent, { type: "can_play" });
+  });
+
+  // 2b. loaded while video already playing (autostart) → can_play then play
+  it("'loaded' while video not paused → can_play then play", async () => {
+    instance = await setup(player, video, mockSession);
+    video.paused = false;
+    player.fireLoaded();
+
+    const calls = mockSession.processEvent.mock.calls.map((c) => c.arguments[0]);
+    assert.deepStrictEqual(calls, [{ type: "can_play" }, { type: "play" }]);
   });
 
   // 3. buffering(true) before first_frame → waiting
@@ -297,7 +308,7 @@ describe("PlinthShaka", () => {
         bitrate_bps: 2_500_000,
         width: 1280,
         height: 720,
-        framerate: 29.97,
+        framerate: "29.97",
         codec: "avc1.4d401f",
       },
     });

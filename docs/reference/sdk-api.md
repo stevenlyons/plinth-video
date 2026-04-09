@@ -59,7 +59,7 @@ Shared across both platforms.
 |---|---|---|
 | `endpoint` | `http://localhost:3000/beacon` | URL that receives `POST` requests with beacon batches. |
 | `project_key` | `p123456789` | Identifies the project. Included in every beacon payload. |
-| `heartbeat_interval_ms` | `10000` | Milliseconds between heartbeat beacons while a session is active. |
+| `heartbeat_interval_ms` | `10000` | Maximum silence before a keepalive heartbeat is sent. A heartbeat fires only if no other beacon has been emitted in this window and the session is in an active state. |
 
 ---
 
@@ -69,22 +69,22 @@ Shared across both platforms.
 initialize()
     │
     ▼
-[Idle] ──load──► [Loading] ──canPlay──► [Ready]
-                                            │
-                                          play()
-                                            │
-                                            ▼
-                                      [PlayAttempt] ──first_frame──► [Playing]
-                                            │                            │
-                                         waiting                    pause/seek/end
-                                            │                            │
-                                            ▼                            ▼
-                                       [Buffering]               [Paused/Seeking/Ended]
-                                            │
-                                       first_frame
-                                            │
-                                            ▼
-                                        [Playing]
+[Idle] ──load──► [Loading] ──can_play──► [Ready]
+                                             │
+                                           play
+                                             │
+                                             ▼
+                                       [PlayAttempt] ──first_frame──► [Playing] ──stall──► [Rebuffering]
+                                             │                            │  ▲                    │
+                                           waiting                   pause/seek/end            playing
+                                             │                            │  │                    │
+                                             ▼                            ▼  └────────────────────┘
+                                        [Buffering]            [Paused/Seeking/Ended]
+                                             │
+                                        first_frame
+                                             │
+                                             ▼
+                                         [Playing]
 
-destroy() → session_end beacon (if session was active)
+destroy() → final beacon flushed (if session was active)
 ```

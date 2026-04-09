@@ -59,7 +59,7 @@ final class PlinthSessionTests: XCTestCase {
         XCTAssertTrue(batches.isEmpty)
     }
 
-    func testPlayEmitsSessionOpen() {
+    func testPlayEmitsPlayBeacon() {
         let batches = collectBeacons { session in
             session.processEvent(.load(src: "x"))
             session.processEvent(.canPlay)
@@ -68,7 +68,7 @@ final class PlinthSessionTests: XCTestCase {
         XCTAssertEqual(batches.count, 1)
         let beacons = batches[0].beacons
         XCTAssertEqual(beacons.count, 1)
-        XCTAssertEqual(beacons[0].event, "session_open")
+        XCTAssertEqual(beacons[0].event, "play")
         XCTAssertEqual(beacons[0].seq, 0)
     }
 
@@ -76,10 +76,12 @@ final class PlinthSessionTests: XCTestCase {
         let batches = collectBeacons { session in
             reachPlaying(session)
         }
-        // Batch 0: session_open; Batch 1: first_frame
+        // Batch 0: play; Batch 1: first_frame + playing
         XCTAssertEqual(batches.count, 2)
         XCTAssertEqual(batches[1].beacons[0].event, "first_frame")
         XCTAssertEqual(batches[1].beacons[0].seq, 1)
+        XCTAssertEqual(batches[1].beacons[1].event, "playing")
+        XCTAssertEqual(batches[1].beacons[1].seq, 2)
     }
 
     func testPauseEmitsPauseBeacon() {
@@ -110,43 +112,43 @@ final class PlinthSessionTests: XCTestCase {
         XCTAssertEqual(last.event, "seek_end")
     }
 
-    func testWaitingFromPlayingEmitsRebufferStart() {
+    func testWaitingFromPlayingEmitsStall() {
         let batches = collectBeacons { session in
             reachPlaying(session)
             session.processEvent(.waiting)
         }
         let last = batches.last!.beacons[0]
-        XCTAssertEqual(last.event, "rebuffer_start")
+        XCTAssertEqual(last.event, "stall")
     }
 
-    func testPlayingFromRebufferingEmitsRebufferEnd() {
+    func testPlayingFromRebufferingEmitsPlaying() {
         let batches = collectBeacons { session in
             reachPlaying(session)
             session.processEvent(.waiting)
             session.processEvent(.playing)
         }
         let last = batches.last!.beacons[0]
-        XCTAssertEqual(last.event, "rebuffer_end")
+        XCTAssertEqual(last.event, "playing")
     }
 
-    func testEndedEmitsSessionEnd() {
+    func testEndedEmitsCompleted() {
         let batches = collectBeacons { session in
             reachPlaying(session)
             session.processEvent(.ended)
         }
         let last = batches.last!.beacons[0]
-        XCTAssertEqual(last.event, "session_end")
+        XCTAssertEqual(last.event, "completed")
     }
 
     // MARK: - destroy()
 
-    func testDestroyFromPlayingEmitsSessionEnd() {
+    func testDestroyFromPlayingEmitsEnded() {
         let batches = collectBeacons { session in
             reachPlaying(session)
             session.destroy()
         }
         let last = batches.last!.beacons[0]
-        XCTAssertEqual(last.event, "session_end")
+        XCTAssertEqual(last.event, "ended")
     }
 
     func testDestroyIsIdempotent() {

@@ -34,6 +34,7 @@ class FakeHls {
 
 class FakeVideo extends EventTarget {
   currentTime = 0;
+  paused = true;
   ended = false;
   buffered = { length: 0, start: (_i: number) => 0, end: (_i: number) => 0 } as unknown as TimeRanges;
   error: { code: number; message?: string } | null = null;
@@ -124,6 +125,16 @@ describe("PlinthHlsJs", () => {
     hls.emit(Events.MANIFEST_PARSED, {});
 
     assertCalledWith(mockSession.processEvent, { type: "can_play" });
+  });
+
+  // 2b. MANIFEST_PARSED while video already playing (autostart) → can_play then play
+  it("MANIFEST_PARSED while video not paused → can_play then play", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.paused = false; // simulate video.play() called before manifest loaded
+    hls.emit(Events.MANIFEST_PARSED, {});
+
+    const calls = mockSession.processEvent.mock.calls.map((c) => c.arguments[0]);
+    assert.deepStrictEqual(calls, [{ type: "can_play" }, { type: "play" }]);
   });
 
   // 3. video play → play

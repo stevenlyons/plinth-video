@@ -64,14 +64,14 @@ final class PlinthAVPlayerTests: XCTestCase {
         XCTAssertTrue(batches.isEmpty)
     }
 
-    func testPlayEmitsSessionOpen() {
+    func testPlayEmitsPlayBeacon() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         plinth.handleLoad(src: "x")
         plinth.handleCanPlay()
         plinth.handlePlay()
         XCTAssertEqual(batches.count, 1)
-        XCTAssertEqual(batches[0].beacons[0].event, "session_open")
+        XCTAssertEqual(batches[0].beacons[0].event, "play")
         XCTAssertEqual(batches[0].beacons[0].seq, 0)
     }
 
@@ -79,10 +79,12 @@ final class PlinthAVPlayerTests: XCTestCase {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
-        // batch 0: session_open, batch 1: first_frame
+        // batch 0: play, batch 1: first_frame + playing
         XCTAssertEqual(batches.count, 2)
         XCTAssertEqual(batches[1].beacons[0].event, "first_frame")
         XCTAssertEqual(batches[1].beacons[0].seq, 1)
+        XCTAssertEqual(batches[1].beacons[1].event, "playing")
+        XCTAssertEqual(batches[1].beacons[1].seq, 2)
     }
 
     func testWaitingBeforeFirstFrameDoesNotEmitBeacon() {
@@ -91,10 +93,10 @@ final class PlinthAVPlayerTests: XCTestCase {
         let plinth = makePlinth { batches.append($0) }
         plinth.handleLoad(src: "x")
         plinth.handleCanPlay()
-        plinth.handlePlay()      // → session_open (1 batch)
+        plinth.handlePlay()      // → play beacon (1 batch)
         plinth.handleWaiting()   // → Buffering (no beacon)
         XCTAssertEqual(batches.count, 1)
-        XCTAssertEqual(batches[0].beacons[0].event, "session_open")
+        XCTAssertEqual(batches[0].beacons[0].event, "play")
     }
 
     func testFirstFrameAfterWaitingEmitsFirstFrame() {
@@ -116,13 +118,13 @@ final class PlinthAVPlayerTests: XCTestCase {
         XCTAssertEqual(batches.last!.beacons[0].event, "pause")
     }
 
-    func testResumeAfterPauseEmitsPlayBeacon() {
+    func testResumeAfterPauseEmitsPlayingBeacon() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handlePause()
         plinth.handlePlay()
-        XCTAssertEqual(batches.last!.beacons[0].event, "play")
+        XCTAssertEqual(batches.last!.beacons[0].event, "playing")
     }
 
     func testResumeNoSecondFirstFrame() {
@@ -137,29 +139,29 @@ final class PlinthAVPlayerTests: XCTestCase {
         XCTAssertEqual(batches.count, countBeforeResume, "no extra beacon on resume")
     }
 
-    func testWaitingFromPlayingEmitsRebufferStart() {
+    func testWaitingFromPlayingEmitsStall() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handleWaiting()
-        XCTAssertEqual(batches.last!.beacons[0].event, "rebuffer_start")
+        XCTAssertEqual(batches.last!.beacons[0].event, "stall")
     }
 
-    func testRebufferRecoveryEmitsRebufferEnd() {
+    func testRebufferRecoveryEmitsPlaying() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handleWaiting()
         plinth.handleRebufferRecovery()
-        XCTAssertEqual(batches.last!.beacons[0].event, "rebuffer_end")
+        XCTAssertEqual(batches.last!.beacons[0].event, "playing")
     }
 
-    func testEndedEmitsSessionEnd() {
+    func testEndedEmitsCompleted() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.handleEnded()
-        XCTAssertEqual(batches.last!.beacons[0].event, "session_end")
+        XCTAssertEqual(batches.last!.beacons[0].event, "completed")
     }
 
     // MARK: - Seek events (driven via session directly, same as seek(to:) completion)
@@ -211,12 +213,12 @@ final class PlinthAVPlayerTests: XCTestCase {
 
     // MARK: - destroy()
 
-    func testDestroyFromPlayingEmitsSessionEnd() {
+    func testDestroyFromPlayingEmitsEnded() {
         var batches: [BeaconBatch] = []
         let plinth = makePlinth { batches.append($0) }
         reachPlaying(plinth)
         plinth.destroy()
-        XCTAssertEqual(batches.last!.beacons[0].event, "session_end")
+        XCTAssertEqual(batches.last!.beacons[0].event, "ended")
     }
 
     func testDestroyFromIdleEmitsNothing() {

@@ -7,7 +7,7 @@ import { postBeacons } from "../src/poster.js";
 describe("postBeacons", () => {
   const ENDPOINT = "http://localhost:3000/beacon";
   const PROJECT_KEY = "p123456789";
-  const BATCH_JSON = JSON.stringify({ beacons: [{ seq: 0, event: "session_open" }] });
+  const BATCH_JSON = JSON.stringify({ beacons: [{ seq: 0, event: "play" }] });
 
   let fetchMock: ReturnType<typeof mock.fn>;
   let originalFetch: typeof globalThis.fetch;

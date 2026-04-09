@@ -8,35 +8,39 @@ miniserde::make_place!(Place);
 /// Beacon event type — drives which additional fields are present.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BeaconEvent {
-    SessionOpen,
-    FirstFrame,
-    Pause,
+    /// Session starts; seq=0. Carries video/client/sdk metadata. No state/metrics.
     Play,
+    FirstFrame,
+    /// Video is actively playing: after first_frame, after stall recovery, after resume.
+    Playing,
+    Pause,
     SeekStart,
     SeekEnd,
-    RebufferStart,
-    RebufferEnd,
+    Stall,
     QualityChange,
     Error,
     Heartbeat,
-    SessionEnd,
+    /// Session ended by destroy() or user navigation.
+    Ended,
+    /// Video reached its natural end.
+    Completed,
 }
 
 impl BeaconEvent {
     fn as_str(&self) -> &'static str {
         match self {
-            BeaconEvent::SessionOpen => "session_open",
-            BeaconEvent::FirstFrame => "first_frame",
-            BeaconEvent::Pause => "pause",
             BeaconEvent::Play => "play",
+            BeaconEvent::FirstFrame => "first_frame",
+            BeaconEvent::Playing => "playing",
+            BeaconEvent::Pause => "pause",
             BeaconEvent::SeekStart => "seek_start",
             BeaconEvent::SeekEnd => "seek_end",
-            BeaconEvent::RebufferStart => "rebuffer_start",
-            BeaconEvent::RebufferEnd => "rebuffer_end",
+            BeaconEvent::Stall => "stall",
             BeaconEvent::QualityChange => "quality_change",
             BeaconEvent::Error => "error",
             BeaconEvent::Heartbeat => "heartbeat",
-            BeaconEvent::SessionEnd => "session_end",
+            BeaconEvent::Ended => "ended",
+            BeaconEvent::Completed => "completed",
         }
     }
 }
@@ -52,18 +56,18 @@ impl miniserde::de::Deserialize for BeaconEvent {
         impl miniserde::de::Visitor for Place<BeaconEvent> {
             fn string(&mut self, s: &str) -> miniserde::Result<()> {
                 self.out = Some(match s {
-                    "session_open" => BeaconEvent::SessionOpen,
-                    "first_frame" => BeaconEvent::FirstFrame,
-                    "pause" => BeaconEvent::Pause,
                     "play" => BeaconEvent::Play,
+                    "first_frame" => BeaconEvent::FirstFrame,
+                    "playing" => BeaconEvent::Playing,
+                    "pause" => BeaconEvent::Pause,
                     "seek_start" => BeaconEvent::SeekStart,
                     "seek_end" => BeaconEvent::SeekEnd,
-                    "rebuffer_start" => BeaconEvent::RebufferStart,
-                    "rebuffer_end" => BeaconEvent::RebufferEnd,
+                    "stall" => BeaconEvent::Stall,
                     "quality_change" => BeaconEvent::QualityChange,
                     "error" => BeaconEvent::Error,
                     "heartbeat" => BeaconEvent::Heartbeat,
-                    "session_end" => BeaconEvent::SessionEnd,
+                    "ended" => BeaconEvent::Ended,
+                    "completed" => BeaconEvent::Completed,
                     _ => return Err(miniserde::Error),
                 });
                 Ok(())
@@ -367,18 +371,18 @@ mod tests {
     #[test]
     fn beacon_event_serializes_to_snake_case() {
         let cases = [
-            (BeaconEvent::SessionOpen, "\"session_open\""),
-            (BeaconEvent::FirstFrame, "\"first_frame\""),
-            (BeaconEvent::Pause, "\"pause\""),
             (BeaconEvent::Play, "\"play\""),
+            (BeaconEvent::FirstFrame, "\"first_frame\""),
+            (BeaconEvent::Playing, "\"playing\""),
+            (BeaconEvent::Pause, "\"pause\""),
             (BeaconEvent::SeekStart, "\"seek_start\""),
             (BeaconEvent::SeekEnd, "\"seek_end\""),
-            (BeaconEvent::RebufferStart, "\"rebuffer_start\""),
-            (BeaconEvent::RebufferEnd, "\"rebuffer_end\""),
+            (BeaconEvent::Stall, "\"stall\""),
             (BeaconEvent::QualityChange, "\"quality_change\""),
             (BeaconEvent::Error, "\"error\""),
             (BeaconEvent::Heartbeat, "\"heartbeat\""),
-            (BeaconEvent::SessionEnd, "\"session_end\""),
+            (BeaconEvent::Ended, "\"ended\""),
+            (BeaconEvent::Completed, "\"completed\""),
         ];
         for (event, expected) in cases {
             assert_eq!(
@@ -392,10 +396,14 @@ mod tests {
 
     #[test]
     fn beacon_event_deserializes_from_snake_case() {
-        let e: BeaconEvent = miniserde::json::from_str("\"rebuffer_start\"").unwrap();
-        assert_eq!(e, BeaconEvent::RebufferStart);
-        let e: BeaconEvent = miniserde::json::from_str("\"session_open\"").unwrap();
-        assert_eq!(e, BeaconEvent::SessionOpen);
+        let e: BeaconEvent = miniserde::json::from_str("\"stall\"").unwrap();
+        assert_eq!(e, BeaconEvent::Stall);
+        let e: BeaconEvent = miniserde::json::from_str("\"play\"").unwrap();
+        assert_eq!(e, BeaconEvent::Play);
+        let e: BeaconEvent = miniserde::json::from_str("\"playing\"").unwrap();
+        assert_eq!(e, BeaconEvent::Playing);
+        let e: BeaconEvent = miniserde::json::from_str("\"completed\"").unwrap();
+        assert_eq!(e, BeaconEvent::Completed);
     }
 
     // ── PlayerState serialization ────────────────────────────────────────────
@@ -499,7 +507,7 @@ mod tests {
 
     #[test]
     fn beacon_batch_wraps_beacons_under_key() {
-        let b = minimal_beacon(BeaconEvent::SessionOpen);
+        let b = minimal_beacon(BeaconEvent::Play);
         let batch = BeaconBatch::new(vec![b]);
         let json = batch.to_json();
         assert!(json.starts_with("{\"beacons\":["), "got: {}", json);
@@ -509,7 +517,7 @@ mod tests {
     #[test]
     fn beacon_batch_preserves_beacon_count() {
         let beacons = vec![
-            minimal_beacon(BeaconEvent::SessionOpen),
+            minimal_beacon(BeaconEvent::Play),
             minimal_beacon(BeaconEvent::FirstFrame),
         ];
         let batch = BeaconBatch::new(beacons);

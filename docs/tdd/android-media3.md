@@ -796,13 +796,13 @@ class PlinthMedia3Test {
             options = Media3Options(sessionFactory = { _, _ -> session }))
     }
 
-    @Test fun `play sequence emits session_open then first_frame`() {
+    @Test fun `play sequence emits play then first_frame then playing`() {
         plinth.handleLoad("https://example.com/v.m3u8")
         plinth.handlePlay()
         plinth.handleCanPlay()
         plinth.handleFirstFrame()
         val events = capturedBatches.flatMap { it.beacons }.map { it.event }
-        assertThat(events).contains("session_open", "first_frame")
+        assertThat(events).contains("play", "first_frame", "playing")
     }
 }
 ```

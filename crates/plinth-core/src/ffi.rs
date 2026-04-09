@@ -361,9 +361,9 @@ mod tests {
             let r2 = take_c_string(plinth_session_process_event(ptr, can_play.as_ptr(), 100));
             assert!(r2.contains("beacons"));
 
-            // Play → PlayAttempt: emits session_open
+            // Play → PlayAttempt: emits play beacon (session open)
             let r3 = take_c_string(plinth_session_process_event(ptr, play.as_ptr(), 200));
-            assert!(r3.contains("session_open"));
+            assert!(r3.contains("\"play\""));
 
             // FirstFrame → Playing: emits first_frame
             let r4 =
@@ -374,9 +374,9 @@ mod tests {
             let r5 = take_c_string(plinth_session_tick(ptr, 2_000));
             assert!(r5.contains("beacons"));
 
-            // Destroy from Playing — emits session_end
+            // Destroy from Playing — emits ended
             let r6 = take_c_string(plinth_session_destroy(ptr, 5_000));
-            assert!(r6.contains("session_end"));
+            assert!(r6.contains("\"ended\""));
         }
     }
 

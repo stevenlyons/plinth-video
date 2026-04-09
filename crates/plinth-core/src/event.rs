@@ -19,7 +19,7 @@ pub enum PlayerEvent {
     FirstFrame,
     /// Media `playing` event — fires on any resume (rebuffer recovery or resume from pause).
     /// PlayAttempt/Buffering → Playing (no first_frame beacon if vst already set);
-    /// Rebuffering → Playing (emits rebuffer_end beacon).
+    /// Rebuffering → Playing (emits stall_end beacon).
     Playing,
     /// User or system paused: Playing/Rebuffering → Paused.
     Pause,

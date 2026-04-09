@@ -1,6 +1,8 @@
 import { PlinthSession } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
+export const VERSION = "0.2.0";
+
 export interface VideoMeta {
   id: string;
   title?: string;
@@ -61,6 +63,7 @@ export class PlinthDashjs {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
+  private isSeeking = false;
   private lastQualityBandwidth: number | null = null;
   private destroyed = false;
   private playerHandlers = new Map<string, (e?: unknown) => void>();
@@ -122,6 +125,7 @@ export class PlinthDashjs {
   private attachPlayerListeners(): void {
     const onManifestLoadingStarted = () => {
       this.hasFiredFirstFrame = false;
+      this.isSeeking = false;
       this.lastQualityBandwidth = null;
       this.emit({ type: "load", src: this.player.getSource() ?? "" });
     };
@@ -130,17 +134,22 @@ export class PlinthDashjs {
 
     const onStreamInitialized = () => {
       this.emit({ type: "can_play" });
+      if (!this.video.paused) {
+        this.emit({ type: "play" });
+      }
     };
     this.player.on(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
     this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
 
     const onPlaybackStalled = () => {
+      if (this.isSeeking) return;
       this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
     };
     this.player.on(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
     this.playerHandlers.set(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
 
     const onBufferLoaded = () => {
+      if (this.isSeeking) return;
       this.emit({ type: "playing" });
     };
     this.player.on(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
@@ -201,12 +210,14 @@ export class PlinthDashjs {
     this.videoHandlers.set("pause", onPause);
 
     const onSeeking: EventListener = () => {
+      this.isSeeking = true;
       this.emit({ type: "seek_start", from_ms: this.lastPlayheadMs });
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
+      this.isSeeking = false;
       this.emit({
         type: "seek_end",
         to_ms: this.video.currentTime * 1000,

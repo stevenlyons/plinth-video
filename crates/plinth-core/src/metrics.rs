@@ -9,7 +9,7 @@ pub struct Metrics {
     pub rebuffer_ms: u64,
     /// Total elapsed ms from play_attempt to now (inclusive of all states).
     pub watched_ms: u64,
-    /// Number of discrete rebuffer events (each rebuffer_start increments this).
+    /// Number of discrete stall events (each stall beacon increments this).
     pub rebuffer_count: u32,
     /// Number of error events emitted.
     pub error_count: u32,

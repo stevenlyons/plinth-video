@@ -1,6 +1,8 @@
 import { PlinthSession } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
+export const VERSION = "0.2.0";
+
 export interface VideoMeta {
   id: string;
   title?: string;
@@ -27,6 +29,7 @@ export class PlinthShaka {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
+  private isSeeking = false;
   private destroyed = false;
   private shakaHandlers = new Map<string, EventListener>();
   private videoHandlers = new Map<string, EventListener>();
@@ -100,11 +103,15 @@ export class PlinthShaka {
 
     const onLoaded: EventListener = () => {
       this.emit({ type: "can_play" });
+      if (!this.video.paused) {
+        this.emit({ type: "play" });
+      }
     };
     this.player.addEventListener("loaded", onLoaded);
     this.shakaHandlers.set("loaded", onLoaded);
 
     const onBuffering: EventListener = (e) => {
+      if (this.isSeeking) return;
       if ((e as any).buffering) {
         this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
       } else {
@@ -175,12 +182,14 @@ export class PlinthShaka {
     this.videoHandlers.set("pause", onPause);
 
     const onSeeking: EventListener = () => {
+      this.isSeeking = true;
       this.emit({ type: "seek_start", from_ms: this.lastPlayheadMs });
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
+      this.isSeeking = false;
       this.emit({
         type: "seek_end",
         to_ms: this.video.currentTime * 1000,

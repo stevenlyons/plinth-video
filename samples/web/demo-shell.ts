@@ -1,5 +1,5 @@
 import { PlinthSession } from "@wirevice/plinth-js";
-import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
+import type { BeaconBatch, PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 type SessionFactory = (meta: SessionMeta, config?: PlinthConfig) => Promise<PlinthSession>;
 type Teardown = () => void | Promise<void>;
@@ -19,12 +19,29 @@ export async function loggingSessionFactory(
   config?: PlinthConfig,
 ): Promise<PlinthSession> {
   const session = await PlinthSession.create(meta, config);
-  const orig = session.processEvent.bind(session);
+  const origProcessEvent = session.processEvent.bind(session);
   session.processEvent = (event: PlayerEvent) => {
-    log(`→ ${JSON.stringify(event)}`);
-    orig(event);
+    const batch = origProcessEvent(event);
+    for (const beacon of batch.beacons) {
+      log(`◆ ${beacon.event} (seq=${beacon.seq})`);
+    }
+    return batch;
+  };
+  const origTick = session.tick.bind(session);
+  session.tick = () => {
+    const sent = origTick();
+    if (sent) log("♥ heartbeat");
+    return sent;
   };
   return session;
+}
+
+export function showVersions(versions: Record<string, string>): void {
+  const el = document.getElementById("versions");
+  if (!el) return;
+  el.textContent = Object.entries(versions)
+    .map(([k, v]) => `${k} ${v}`)
+    .join("  ·  ");
 }
 
 export function setupDemo(loader: Loader): void {
