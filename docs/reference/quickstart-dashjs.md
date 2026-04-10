@@ -82,14 +82,13 @@ See `packages/web/plinth-dashjs/tests/dashjs.test.ts` for examples using a fake 
 |----------------------------------------------|--------------------------------------------------------------------------|
 | `MANIFEST_LOADING_STARTED`                   | `load` (src from `player.getSource()`); resets `hasFiredFirstFrame`      |
 | `STREAM_INITIALIZED`                         | `can_play`                                                               |
-| `PLAYBACK_STALLED` (before first frame)      | `waiting` — initial buffer stall (PlayAttempt → Buffering)               |
-| `PLAYBACK_STALLED` (after first frame)       | `stall` — mid-playback stall (Playing → Rebuffering)                     |
-| `BUFFER_LOADED`                              | `playing` — buffer recovered; drives Buffering/Rebuffering → Playing     |
-| `PLAYBACK_STARTED` (first time)              | `first_frame` — sets `hasFiredFirstFrame`                                |
-| `PLAYBACK_STARTED` (subsequent)              | no-op (`BUFFER_LOADED` already fired `playing` for recovery)             |
 | `QUALITY_CHANGE_RENDERED`                    | `quality_change`                                                         |
 | `ERROR`                                      | `error` (all dash.js errors are treated as fatal)                        |
 | `<video> play`                               | `play`                                                                   |
+| `<video> playing` (first time)               | `first_frame` — sets `hasFiredFirstFrame`                                |
+| `<video> playing` (subsequent)               | `playing` — buffer recovered; drives Buffering/Rebuffering → Playing     |
+| `<video> waiting` (before first frame)       | `waiting` — initial buffer stall (PlayAttempt → Buffering)               |
+| `<video> waiting` (after first frame)        | `stall` — mid-playback stall (Playing → Rebuffering); suppressed during seek |
 | `<video> pause`                              | `pause` — suppressed when `video.ended` is true                          |
 | `<video> seeking`                            | `seek_start`                                                             |
 | `<video> seeked`                             | `seek_end`                                                               |
@@ -100,8 +99,7 @@ See `packages/web/plinth-dashjs/tests/dashjs.test.ts` for examples using a fake 
 ### Key differences from Hls.js and Shaka
 
 - **No auto-destroy**: dash.js has no equivalent of `DESTROYING` (Hls.js) or `unloading` (Shaka). Always call `plinth.destroy()` explicitly before releasing the player.
-- **First frame via player event**: `first_frame` is fired from the dash.js `PLAYBACK_STARTED` event (with `hasFiredFirstFrame` guard), not from `<video> playing`.
-- **`stall` vs `waiting`**: `PLAYBACK_STALLED` maps to `waiting` before the first frame and `stall` after. The `hasFiredFirstFrame` flag (reset on each `MANIFEST_LOADING_STARTED`) distinguishes the two.
-- **Buffer recovery via `BUFFER_LOADED`**: emits `playing`, which drives the `Buffering/Rebuffering → Playing` transition.
+- **`first_frame` and `playing` via `<video> playing`**: Both initial playback and buffer-recovery signals come from the native video element `playing` event, guarded by `hasFiredFirstFrame` — the same pattern used by the HLS.js integration.
+- **`stall` and `waiting` via `<video> waiting`**: The native video element `waiting` event fires whenever the browser cannot continue playback. `hasFiredFirstFrame` differentiates the initial buffering case (`waiting`) from a mid-playback rebuffer (`stall`). Seek-time waiting is suppressed by the `isSeeking` guard.
 - **All errors are fatal**: dash.js surfaces errors without a severity field; all `ERROR` events emit `fatal: true`.
 - **Quality dedup**: `QUALITY_CHANGE_RENDERED` fires on every segment switch. The integration deduplicates by comparing `bandwidth` against the previous emission so identical-bitrate switches don't produce spurious events.

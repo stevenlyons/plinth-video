@@ -16,9 +16,6 @@ type SessionFactory = (meta: SessionMeta, config?: PlinthConfig) => Promise<Plin
 const DashjsEvents = {
   MANIFEST_LOADING_STARTED: "manifestLoadingStarted",
   STREAM_INITIALIZED: "streamInitialized",
-  PLAYBACK_STALLED: "playbackStalled",
-  BUFFER_LOADED: "bufferLoaded",
-  PLAYBACK_STARTED: "playbackStarted",
   QUALITY_CHANGE_RENDERED: "qualityChangeRendered",
   ERROR: "error",
 } as const;
@@ -141,29 +138,6 @@ export class PlinthDashjs {
     this.player.on(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
     this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
 
-    const onPlaybackStalled = () => {
-      if (this.isSeeking) return;
-      this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
-    };
-    this.player.on(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
-    this.playerHandlers.set(DashjsEvents.PLAYBACK_STALLED, onPlaybackStalled);
-
-    const onBufferLoaded = () => {
-      if (this.isSeeking) return;
-      this.emit({ type: "playing" });
-    };
-    this.player.on(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
-    this.playerHandlers.set(DashjsEvents.BUFFER_LOADED, onBufferLoaded);
-
-    const onPlaybackStarted = () => {
-      if (!this.hasFiredFirstFrame) {
-        this.hasFiredFirstFrame = true;
-        this.emit({ type: "first_frame" });
-      }
-    };
-    this.player.on(DashjsEvents.PLAYBACK_STARTED, onPlaybackStarted);
-    this.playerHandlers.set(DashjsEvents.PLAYBACK_STARTED, onPlaybackStarted);
-
     const onQualityChangeRendered = () => {
       const rep = this.player.getCurrentRepresentationForType("video");
       if (!rep) return;
@@ -201,6 +175,28 @@ export class PlinthDashjs {
     const onPlay: EventListener = () => this.emit({ type: "play" });
     this.video.addEventListener("play", onPlay);
     this.videoHandlers.set("play", onPlay);
+
+    const onPlaying: EventListener = () => {
+      if (!this.hasFiredFirstFrame) {
+        this.hasFiredFirstFrame = true;
+        this.emit({ type: "first_frame" });
+      } else if (!this.isSeeking) {
+        this.emit({ type: "playing" });
+      }
+    };
+    this.video.addEventListener("playing", onPlaying);
+    this.videoHandlers.set("playing", onPlaying);
+
+    const onWaiting: EventListener = () => {
+      if (this.isSeeking) return;
+      if (this.hasFiredFirstFrame) {
+        this.emit({ type: "stall" });
+      } else {
+        this.emit({ type: "waiting" });
+      }
+    };
+    this.video.addEventListener("waiting", onWaiting);
+    this.videoHandlers.set("waiting", onWaiting);
 
     const onPause: EventListener = () => {
       if (this.video.ended) return;

@@ -142,45 +142,58 @@ describe("PlinthDashjs", () => {
   });
 
   // 3
-  it("PLAYBACK_STALLED before first_frame → processEvent({ type:'waiting' })", async () => {
+  it("video 'waiting' before first_frame → processEvent({ type:'waiting' })", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("playbackStalled");
+    video.fire("waiting");
 
     assertCalledWith(mockSession.processEvent, { type: "waiting" });
   });
 
   // 3b
-  it("PLAYBACK_STALLED after first_frame → processEvent({ type:'stall' })", async () => {
+  it("video 'waiting' after first_frame → processEvent({ type:'stall' })", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("playbackStarted"); // sets hasFiredFirstFrame
+    video.fire("playing"); // sets hasFiredFirstFrame
     mockSession.processEvent.mock.resetCalls();
-    player.fire("playbackStalled");
+    video.fire("waiting");
 
     assertCalledWith(mockSession.processEvent, { type: "stall" });
   });
 
-  // 4
-  it("BUFFER_LOADED → processEvent({ type:'playing' })", async () => {
+  // 3c
+  it("video 'waiting' while seeking → suppressed", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("bufferLoaded");
+    video.fire("playing"); // sets hasFiredFirstFrame
+    video.fire("seeking");
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("waiting");
+
+    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
+  });
+
+  // 4
+  it("video 'playing' after stall → processEvent({ type:'playing' })", async () => {
+    instance = await setup(player, video, mockSession);
+    video.fire("playing"); // first_frame
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("playing"); // recovery
 
     assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
   // 5
-  it("PLAYBACK_STARTED (first) → processEvent({ type:'first_frame' })", async () => {
+  it("video 'playing' (first) → processEvent({ type:'first_frame' })", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("playbackStarted");
+    video.fire("playing");
 
     assertCalledWith(mockSession.processEvent, { type: "first_frame" });
   });
 
   // 6
-  it("PLAYBACK_STARTED (subsequent) → first_frame emitted only once", async () => {
+  it("video 'playing' (subsequent) → first_frame emitted only once", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("playbackStarted");
-    player.fire("playbackStarted");
-    player.fire("playbackStarted");
+    video.fire("playing");
+    video.fire("playing");
+    video.fire("playing");
 
     const firstFrameCalls = mockSession.processEvent.mock.calls.filter(
       (c) => (c.arguments[0] as any).type === "first_frame",
@@ -191,9 +204,9 @@ describe("PlinthDashjs", () => {
   // 7
   it("hasFiredFirstFrame resets on MANIFEST_LOADING_STARTED — second first_frame emitted after reload", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("playbackStarted");         // first_frame #1
+    video.fire("playing");               // first_frame #1
     player.fire("manifestLoadingStarted");  // resets flag
-    player.fire("playbackStarted");         // first_frame #2
+    video.fire("playing");               // first_frame #2
 
     const firstFrameCalls = mockSession.processEvent.mock.calls.filter(
       (c) => (c.arguments[0] as any).type === "first_frame",
@@ -370,7 +383,8 @@ describe("PlinthDashjs", () => {
 
     player.fire("manifestLoadingStarted");
     player.fire("streamInitialized");
-    player.fire("playbackStalled");
+    video.fire("waiting");
+    video.fire("playing");
     video.fire("play");
     video.fire("pause");
 
