@@ -160,14 +160,14 @@ describe("PlinthDashjs", () => {
   });
 
   // 3c
-  it("video 'waiting' while seeking → suppressed", async () => {
+  it("video 'waiting' while seeking after first_frame → stall (isSeeking does not suppress waiting)", async () => {
     instance = await setup(player, video, mockSession);
     video.fire("playing"); // sets hasFiredFirstFrame
     video.fire("seeking");
     mockSession.processEvent.mock.resetCalls();
     video.fire("waiting");
 
-    assert.strictEqual(mockSession.processEvent.mock.callCount(), 0);
+    assertCalledWith(mockSession.processEvent, { type: "stall" });
   });
 
   // 4
@@ -231,11 +231,13 @@ describe("PlinthDashjs", () => {
   });
 
   // 10
-  it("video 'seeking' uses lastPlayheadMs from previous timeupdate", async () => {
+  it("seek > 500ms → seek_start { from_ms } and seek_end emitted on seeked", async () => {
     instance = await setup(player, video, mockSession);
     video.currentTime = 5.0;
-    video.fire("timeupdate");
-    video.fire("seeking");
+    video.fire("timeupdate");    // lastPlayheadMs = 5000
+    video.fire("seeking");       // _pendingSeekFrom = 5000
+    video.currentTime = 10.0;   // seeked to 10s (distance = 5000 > 500)
+    video.fire("seeked");
 
     const seekCall = mockSession.processEvent.mock.calls.find(
       (c) => (c.arguments[0] as any).type === "seek_start",

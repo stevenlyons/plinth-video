@@ -111,10 +111,9 @@ export class PlinthShaka {
     this.shakaHandlers.set("loaded", onLoaded);
 
     const onBuffering: EventListener = (e) => {
-      if (this.isSeeking) return;
       if ((e as any).buffering) {
         this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
-      } else {
+      } else if (!this.isSeeking) {
         this.emit({ type: "playing" });
       }
     };
@@ -181,20 +180,27 @@ export class PlinthShaka {
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
+    let _pendingSeekFrom: number | null = null;
     const onSeeking: EventListener = () => {
       this.isSeeking = true;
-      this.emit({ type: "seek_start", from_ms: this.lastPlayheadMs });
+      _pendingSeekFrom = Math.round(this.lastPlayheadMs);
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
       this.isSeeking = false;
-      this.emit({
-        type: "seek_end",
-        to_ms: this.video.currentTime * 1000,
-        buffer_ready: isBufferReady(this.video),
-      });
+      const seekTo = Math.round(this.video.currentTime * 1000);
+      const seekDistance = Math.abs(seekTo - (_pendingSeekFrom ?? 0));
+      if (seekDistance > 250) {
+        this.emit({ type: "seek_start", from_ms: _pendingSeekFrom! });
+        this.emit({
+          type: "seek_end",
+          to_ms: seekTo,
+          buffer_ready: isBufferReady(this.video),
+        });
+      }
+      _pendingSeekFrom = null;
     };
     this.video.addEventListener("seeked", onSeeked);
     this.videoHandlers.set("seeked", onSeeked);
@@ -204,7 +210,7 @@ export class PlinthShaka {
     this.videoHandlers.set("ended", onEnded);
 
     const onTimeUpdate: EventListener = () => {
-      const ms = this.video.currentTime * 1000;
+      const ms = Math.round(this.video.currentTime * 1000);
       this.lastPlayheadMs = ms;
       this.session.setPlayhead(ms);
     };

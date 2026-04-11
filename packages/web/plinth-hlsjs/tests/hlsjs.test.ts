@@ -215,12 +215,14 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.setPlayhead, 12_500);
   });
 
-  // 10. video seeking → seek_start with lastPlayheadMs
-  it("video 'seeking' uses lastPlayheadMs from previous timeupdate", async () => {
+  // 10. seek > 500ms → seek_start emitted on seeked with lastPlayheadMs as from_ms
+  it("seek > 500ms → seek_start { from_ms } and seek_end emitted on seeked", async () => {
     instance = await setup(hls, video, mockSession);
     video.currentTime = 5.0;
-    video.fire("timeupdate");
-    video.fire("seeking");
+    video.fire("timeupdate");    // lastPlayheadMs = 5000
+    video.fire("seeking");       // _pendingSeekFrom = 5000
+    video.currentTime = 10.0;   // seeked to 10s (distance = 5000 > 500)
+    video.fire("seeked");
 
     const seekCall = mockSession.processEvent.mock.calls.find(
       (c) => (c.arguments[0] as any).type === "seek_start",
