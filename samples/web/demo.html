@@ -23,9 +23,13 @@
     #clear-log, #copy-log { background: none; border: none; cursor: pointer; color: #4b5563; padding: 0; line-height: 1; }
     #clear-log:hover, #copy-log:hover { color: #9ca3af; }
     #log { flex: 1; overflow-y: auto; padding: 8px 0; list-style: none; font-family: monospace; font-size: 0.72rem; }
-    #log li { padding: 3px 14px; border-bottom: 1px solid #1a1a1a; color: #9ca3af; word-break: break-all; }
+    #log li { border-bottom: 1px solid #1a1a1a; color: #9ca3af; word-break: break-all; }
+    #log li > :not(details) { display: block; padding: 3px 14px; }
+    #log li details summary { padding: 3px 14px; cursor: pointer; list-style: none; }
+    #log li details summary::-webkit-details-marker { display: none; }
     #log li .ts { color: #4b5563; margin-right: 6px; }
     #log li .msg { color: #d1fae5; }
+    #log li .beacon-detail { padding: 6px 14px 8px 24px; color: #6ee7b7; font-size: 0.65rem; background: #161616; border-top: 1px solid #222; white-space: pre; overflow-x: auto; }
     #versions { padding: 4px 14px; font-family: monospace; font-size: 0.65rem; color: #4b5563; border-bottom: 1px solid #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
 </head>

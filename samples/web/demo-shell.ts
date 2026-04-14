@@ -1,17 +1,33 @@
 import { PlinthSession } from "@wirevice/plinth-js";
-import type { BeaconBatch, PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
+import type { Beacon, PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 type SessionFactory = (meta: SessionMeta, config?: PlinthConfig) => Promise<PlinthSession>;
 type Teardown = () => void | Promise<void>;
 type Loader = (url: string, video: HTMLVideoElement, sessionFactory: SessionFactory) => Promise<Teardown>;
 
-export function log(msg: string): void {
+function appendLogItem(html: string): void {
   const ul = document.getElementById("log")!;
   const li = document.createElement("li");
-  const ts = new Date().toISOString().slice(11, 23);
-  li.innerHTML = `<span class="ts">${ts}</span><span class="msg">${msg}</span>`;
+  li.innerHTML = html;
   ul.appendChild(li);
   ul.scrollTop = ul.scrollHeight;
+}
+
+export function log(msg: string): void {
+  const ts = new Date().toISOString().slice(11, 23);
+  appendLogItem(`<span class="ts">${ts}</span><span class="msg">${msg}</span>`);
+}
+
+function logBeacon(beacon: Beacon): void {
+  const ts = new Date().toISOString().slice(11, 23);
+  const summary = `◆ ${beacon.event} (seq=${beacon.seq})`;
+  const detail = JSON.stringify(beacon, null, 2);
+  appendLogItem(
+    `<details>` +
+    `<summary><span class="ts">${ts}</span><span class="msg">${summary}</span></summary>` +
+    `<pre class="beacon-detail">${detail}</pre>` +
+    `</details>`,
+  );
 }
 
 export async function loggingSessionFactory(
@@ -23,7 +39,7 @@ export async function loggingSessionFactory(
   session.processEvent = (event: PlayerEvent) => {
     const batch = origProcessEvent(event);
     for (const beacon of batch.beacons) {
-      log(`◆ ${beacon.event} (seq=${beacon.seq})`);
+      logBeacon(beacon);
     }
     return batch;
   };
@@ -57,7 +73,8 @@ export function setupDemo(loader: Loader): void {
       .map((li) => {
         const ts = li.querySelector(".ts")?.textContent ?? "";
         const msg = li.querySelector(".msg")?.textContent ?? "";
-        return ts + msg;
+        const detail = li.querySelector(".beacon-detail")?.textContent ?? "";
+        return detail ? `${ts}${msg}\n${detail}` : `${ts}${msg}`;
       })
       .join("\n");
     navigator.clipboard.writeText(text);
