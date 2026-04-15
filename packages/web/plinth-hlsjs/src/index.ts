@@ -32,6 +32,8 @@ export class PlinthHlsJs {
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
   private isSeeking = false;
+  private _pendingSeekFrom: number | null = null;
+  private _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
   private hlsHandlers = new Map<string, HlsHandler>();
   private videoHandlers = new Map<string, EventListener>();
@@ -78,6 +80,9 @@ export class PlinthHlsJs {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+
+    clearTimeout(this._seekDebounceTimer!);
+    this._seekDebounceTimer = null;
 
     for (const [event, handler] of this.hlsHandlers) {
       this.hls.off(event as any, handler as any);
@@ -165,7 +170,7 @@ export class PlinthHlsJs {
 
     const onWaiting: EventListener = () => {
       if (this.hasFiredFirstFrame) {
-        this.emit({ type: "stall" });
+        if (!this.isSeeking) this.emit({ type: "stall" });
       } else {
         this.emit({ type: "waiting" });
       }
@@ -180,31 +185,34 @@ export class PlinthHlsJs {
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
-    // Deferred seek: buffer the seek origin and only emit seek events on seeked
-    // if the distance exceeds 2000ms. This filters out internal player nudge seeks
-    // (small epsilon seeks used for stall recovery) that would otherwise suppress
-    // the stall event via the isSeeking guard.
-    let _pendingSeekFrom: number | null = null;
     const onSeeking: EventListener = () => {
+      if (this._pendingSeekFrom === null) {
+        this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
+      }
       this.isSeeking = true;
-      _pendingSeekFrom = Math.round(this.lastPlayheadMs);
+      clearTimeout(this._seekDebounceTimer!);
+      this._seekDebounceTimer = null;
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
-      this.isSeeking = false;
-      const seekTo = Math.round(this.video.currentTime * 1000);
-      const seekDistance = Math.abs(seekTo - (_pendingSeekFrom ?? 0));
-      if (seekDistance > 250) {
-        this.emit({ type: "seek_start", from_ms: _pendingSeekFrom! });
-        this.emit({
-          type: "seek_end",
-          to_ms: seekTo,
-          buffer_ready: isBufferReady(this.video),
-        });
-      }
-      _pendingSeekFrom = null;
+      clearTimeout(this._seekDebounceTimer!);
+      this._seekDebounceTimer = setTimeout(() => {
+        this._seekDebounceTimer = null;
+        this.isSeeking = false;
+        const seekTo = Math.round(this.video.currentTime * 1000);
+        const seekDistance = Math.abs(seekTo - (this._pendingSeekFrom ?? 0));
+        if (seekDistance > 250) {
+          this.emit({ type: "seek_start", from_ms: this._pendingSeekFrom! });
+          this.emit({
+            type: "seek_end",
+            to_ms: seekTo,
+            buffer_ready: isBufferReady(this.video),
+          });
+        }
+        this._pendingSeekFrom = null;
+      }, 300);
     };
     this.video.addEventListener("seeked", onSeeked);
     this.videoHandlers.set("seeked", onSeeked);
