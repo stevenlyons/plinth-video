@@ -41,7 +41,10 @@
           "rebuffer_ms": 0,
           "watched_ms": 1280,
           "rebuffer_count": 0,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       },
       {
@@ -56,7 +59,10 @@
           "rebuffer_ms": 0,
           "watched_ms": 1280,
           "rebuffer_count": 0,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       },
       {
@@ -78,7 +84,10 @@
           "rebuffer_ms": 0,
           "watched_ms": 1310,
           "rebuffer_count": 0,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       }
     ]
@@ -100,7 +109,10 @@
           "rebuffer_ms": 0,
           "watched_ms": 11280,
           "rebuffer_count": 0,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       }
     ]
@@ -121,7 +133,10 @@
           "rebuffer_ms": 0,
           "watched_ms": 15420,
           "rebuffer_count": 1,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       },
       {
@@ -136,14 +151,17 @@
           "rebuffer_ms": 2100,
           "watched_ms": 17520,
           "rebuffer_count": 1,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 0
         }
       }
     ]
   },
 
   "seek": {
-    "_label": "Batch 5 — user seeks forward while playing. seek_end lands back in playing state.",
+    "_label": "Batch 5 — user seeks forward while playing. seek_end lands back in playing state (buffer ready).",
     "beacons": [
       {
         "seq": 7,
@@ -158,7 +176,10 @@
           "rebuffer_ms": 2100,
           "watched_ms": 22100,
           "rebuffer_count": 1,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 1
         }
       },
       {
@@ -175,7 +196,10 @@
           "rebuffer_ms": 2100,
           "watched_ms": 22480,
           "rebuffer_count": 1,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 1
         }
       }
     ]
@@ -197,7 +221,10 @@
           "rebuffer_ms": 2100,
           "watched_ms": 596210,
           "rebuffer_count": 1,
-          "error_count": 0
+          "error_count": 0,
+          "seek_buffer_ms": 0,
+          "seek_buffer_count": 0,
+          "seek_count": 1
         }
       }
     ]

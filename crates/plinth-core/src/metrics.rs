@@ -13,6 +13,12 @@ pub struct Metrics {
     pub rebuffer_count: u32,
     /// Number of error events emitted.
     pub error_count: u32,
+    /// Cumulative ms spent in Rebuffering entered via Seeking → Rebuffering.
+    pub seek_buffer_ms: u64,
+    /// Number of seeks that resulted in buffering (Seeking → Rebuffering).
+    pub seek_buffer_count: u32,
+    /// Total seek events initiated during the session (SeekStart events).
+    pub seek_count: u32,
 }
 
 impl Metrics {
@@ -24,6 +30,9 @@ impl Metrics {
             watched_ms: 0,
             rebuffer_count: 0,
             error_count: 0,
+            seek_buffer_ms: 0,
+            seek_buffer_count: 0,
+            seek_count: 0,
         }
     }
 }

@@ -182,7 +182,7 @@
         "rebuffer_ms": {
           "type": "integer",
           "minimum": 0,
-          "description": "Cumulative time in the Rebuffering state."
+          "description": "Cumulative ms spent in mid-playback rebuffering (Playing → Rebuffering only). Does not include seek-induced buffering."
         },
         "watched_ms": {
           "type": "integer",
@@ -192,15 +192,30 @@
         "rebuffer_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of discrete stall events (each stall beacon increments this)."
+          "description": "Number of discrete mid-playback stall events (Playing → Rebuffering transitions)."
         },
         "error_count": {
           "type": "integer",
           "minimum": 0,
           "description": "Number of error events emitted, fatal and non-fatal combined."
+        },
+        "seek_buffer_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative ms spent buffering after seeks (Seeking → Rebuffering only). Does not include mid-playback stalls."
+        },
+        "seek_buffer_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of seeks that resulted in buffering (Seeking → Rebuffering transitions)."
+        },
+        "seek_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of seek events initiated during the session (SeekStart events). Includes seeks that did not cause buffering."
         }
       },
-      "required": ["vst_ms", "played_ms", "rebuffer_ms", "watched_ms", "rebuffer_count", "error_count"]
+      "required": ["vst_ms", "played_ms", "rebuffer_ms", "watched_ms", "rebuffer_count", "error_count", "seek_buffer_ms", "seek_buffer_count", "seek_count"]
     },
 
     "VideoMetadata": {

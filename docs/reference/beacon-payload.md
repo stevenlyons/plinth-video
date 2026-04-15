@@ -63,10 +63,13 @@ Present on all beacons except `play` (seq=0). Each beacon carries the full cumul
 |---|---|---|
 | `vst_ms` | integer \| null | Video Start Time: ms from `play_attempt` to `first_frame`. Null until first frame renders. |
 | `played_ms` | integer | Cumulative ms spent in the `playing` state. |
-| `rebuffer_ms` | integer | Cumulative ms spent in the `rebuffering` state. |
+| `rebuffer_ms` | integer | Cumulative ms spent in mid-playback rebuffering (`Playing → Rebuffering` only). |
 | `watched_ms` | integer | Total elapsed ms since `play_attempt` (includes buffering, paused, seeking time). |
-| `rebuffer_count` | integer | Number of discrete rebuffer events. |
+| `rebuffer_count` | integer | Number of discrete mid-playback rebuffer events (`Playing → Rebuffering`). |
 | `error_count` | integer | Total errors emitted (fatal and non-fatal). |
+| `seek_buffer_ms` | integer | Cumulative ms spent buffering after seeks (`Seeking → Rebuffering` only). |
+| `seek_buffer_count` | integer | Number of seeks that resulted in buffering (`Seeking → Rebuffering` transitions). |
+| `seek_count` | integer | Total seek events initiated during the session (`SeekStart` events). |
 
 ---
 

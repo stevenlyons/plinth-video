@@ -7,4 +7,4 @@
 - [x] [Playback Position Tracking](docs/tdd/playback-position-tracking.md)
 - [x] [dash.js Player Web Integration](docs/tdd/dashjs-integration.md)
 - [ ] [Viewership Metrics](docs/tdd/viewership-metrics.md)
-- [ ] [Rebuffer and Seek Buffer Tracking](docs/tdd/rebuffer-tracking.md)
+- [x] [Rebuffer and Seek Buffer Tracking](docs/tdd/rebuffer-tracking.md)

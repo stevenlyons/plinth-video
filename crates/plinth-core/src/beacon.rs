@@ -537,6 +537,9 @@ mod tests {
             watched_ms: 5000,
             rebuffer_count: 0,
             error_count: 0,
+            seek_buffer_ms: 0,
+            seek_buffer_count: 0,
+            seek_count: 0,
         });
         let batch = BeaconBatch::new(vec![b]);
         let json = batch.to_json();
@@ -635,6 +638,9 @@ mod tests {
             watched_ms: 17520,
             rebuffer_count: 1,
             error_count: 0,
+            seek_buffer_ms: 0,
+            seek_buffer_count: 0,
+            seek_count: 0,
         };
         let json = miniserde::json::to_string(&m);
         let back: Metrics = miniserde::json::from_str(&json).unwrap();

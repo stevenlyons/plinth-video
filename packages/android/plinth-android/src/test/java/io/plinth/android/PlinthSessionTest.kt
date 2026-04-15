@@ -328,7 +328,7 @@ class PlinthSessionTest {
                 "ts":9999,
                 "event":"heartbeat",
                 "state":"playing",
-                "metrics":{"vst_ms":500,"played_ms":1000,"rebuffer_ms":0,"watched_ms":1500,"rebuffer_count":0,"error_count":0},
+                "metrics":{"vst_ms":500,"played_ms":1000,"rebuffer_ms":0,"watched_ms":1500,"rebuffer_count":0,"error_count":0,"seek_buffer_ms":0,"seek_buffer_count":0,"seek_count":0},
                 "playhead_ms":1234
             }]}
         """.trimIndent()
@@ -420,7 +420,7 @@ class PlinthSessionTest {
     @Test fun `Beacon with seek fields deserializes seek_from_ms and seek_to_ms`() {
         val raw = """
             {"beacons":[{"seq":2,"play_id":"x","ts":1,"event":"seek_end",
-             "state":"playing","metrics":{"vst_ms":100,"played_ms":500,"rebuffer_ms":0,"watched_ms":600,"rebuffer_count":0,"error_count":0},
+             "state":"playing","metrics":{"vst_ms":100,"played_ms":500,"rebuffer_ms":0,"watched_ms":600,"rebuffer_count":0,"error_count":0,"seek_buffer_ms":0,"seek_buffer_count":0,"seek_count":0},
              "seek_from_ms":1000,"seek_to_ms":5000}]}
         """.trimIndent()
 

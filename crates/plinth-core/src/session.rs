@@ -30,11 +30,14 @@ pub struct Session {
     /// Counters accumulated across the session (not covered by trackers).
     rebuffer_count: u32,
     error_count: u32,
+    seek_buffer_count: u32,
+    seek_count: u32,
     /// Persisted VST once first_frame is seen.
     vst_ms: Option<u64>,
     watch_tracker: TimeTracker,
     played_tracker: TimeTracker,
     rebuffer_tracker: TimeTracker,
+    seek_buffer_tracker: TimeTracker,
     /// Timestamp (ms) when the current play attempt started; used to compute VST.
     play_attempt_ts: Option<u64>,
     /// Playhead position at the time seekStart fired; echoed on seek_end.
@@ -56,10 +59,13 @@ impl Session {
             play_id: String::new(),
             rebuffer_count: 0,
             error_count: 0,
+            seek_buffer_count: 0,
+            seek_count: 0,
             vst_ms: None,
             watch_tracker: TimeTracker::new(),
             played_tracker: TimeTracker::new(),
             rebuffer_tracker: TimeTracker::new(),
+            seek_buffer_tracker: TimeTracker::new(),
             play_attempt_ts: None,
             seek_from_ms: None,
             last_heartbeat_ms: Some(now_ms),
@@ -102,6 +108,9 @@ impl Session {
             watched_ms: self.watch_tracker.current(now_ms),
             rebuffer_count: self.rebuffer_count,
             error_count: self.error_count,
+            seek_buffer_ms: self.seek_buffer_tracker.current(now_ms),
+            seek_buffer_count: self.seek_buffer_count,
+            seek_count: self.seek_count,
         }
     }
 
@@ -138,10 +147,13 @@ impl Session {
         self.seq = 0;
         self.rebuffer_count = 0;
         self.error_count = 0;
+        self.seek_buffer_count = 0;
+        self.seek_count = 0;
         self.vst_ms = None;
         self.watch_tracker.reset();
         self.played_tracker.reset();
         self.rebuffer_tracker.reset();
+        self.seek_buffer_tracker.reset();
         self.play_attempt_ts = Some(now_ms);
         self.watch_tracker.start(now_ms);
         self.last_heartbeat_ms = Some(now_ms);
@@ -280,6 +292,7 @@ impl Session {
                 self.played_tracker.stop(now_ms);
                 self.pre_seek_state = Some(PlayerState::Playing);
                 self.seek_from_ms = Some(from_ms);
+                self.seek_count += 1;
                 self.state = PlayerState::Seeking;
                 let m = self.snapshot_metrics(now_ms);
                 let mut b = self.make_beacon(
@@ -344,6 +357,7 @@ impl Session {
             (PlayerState::Paused, PlayerEvent::SeekStart { from_ms }) => {
                 self.pre_seek_state = Some(PlayerState::Paused);
                 self.seek_from_ms = Some(from_ms);
+                self.seek_count += 1;
                 self.state = PlayerState::Seeking;
                 let m = self.snapshot_metrics(now_ms);
                 let mut b = self.make_beacon(
@@ -401,8 +415,8 @@ impl Session {
                         self.played_tracker.start(now_ms);
                     }
                     PlayerState::Rebuffering => {
-                        self.rebuffer_tracker.start(now_ms);
-                        self.rebuffer_count += 1;
+                        self.seek_buffer_tracker.start(now_ms);
+                        self.seek_buffer_count += 1;
                         let m2 = self.snapshot_metrics(now_ms);
                         let b2 = self.make_beacon(
                             BeaconEvent::Stall,
@@ -426,6 +440,7 @@ impl Session {
             // ── Rebuffering transitions ───────────────────────────────────────
             (PlayerState::Rebuffering, PlayerEvent::Playing) => {
                 self.rebuffer_tracker.stop(now_ms);
+                self.seek_buffer_tracker.stop(now_ms);
                 self.played_tracker.start(now_ms);
                 self.state = PlayerState::Playing;
                 let m = self.snapshot_metrics(now_ms);
@@ -440,6 +455,7 @@ impl Session {
 
             (PlayerState::Rebuffering, PlayerEvent::Pause) => {
                 self.rebuffer_tracker.stop(now_ms);
+                self.seek_buffer_tracker.stop(now_ms);
                 self.state = PlayerState::Paused;
                 // Emit playing to close the rebuffer interval, then pause.
                 let m = self.snapshot_metrics(now_ms);
@@ -463,8 +479,10 @@ impl Session {
             // Seeking from Rebuffering: treat pre_seek_state as Playing (rebuffer interrupted play).
             (PlayerState::Rebuffering, PlayerEvent::SeekStart { from_ms }) => {
                 self.rebuffer_tracker.stop(now_ms);
+                self.seek_buffer_tracker.stop(now_ms);
                 self.pre_seek_state = Some(PlayerState::Playing);
                 self.seek_from_ms = Some(from_ms);
+                self.seek_count += 1;
                 self.state = PlayerState::Seeking;
                 // Emit playing to close the rebuffer interval, then seek_start.
                 let m = self.snapshot_metrics(now_ms);
@@ -487,6 +505,7 @@ impl Session {
 
             (PlayerState::Rebuffering, PlayerEvent::Error { code, message, fatal }) => {
                 self.rebuffer_tracker.stop(now_ms);
+                self.seek_buffer_tracker.stop(now_ms);
                 self.watch_tracker.stop(now_ms);
                 out.push(self.emit_error(code, message, fatal, now_ms));
             }
@@ -584,6 +603,7 @@ impl Session {
         if was_active {
             self.played_tracker.stop(now_ms);
             self.rebuffer_tracker.stop(now_ms);
+            self.seek_buffer_tracker.stop(now_ms);
             self.watch_tracker.stop(now_ms);
             let m = self.snapshot_metrics(now_ms);
             let mut b = self.make_beacon(
@@ -1732,5 +1752,155 @@ mod tests {
         let beacons = s.tick(11_000);
         let json = miniserde::json::to_string(&beacons[0]);
         assert!(json.contains("\"playhead_ms\":10000"));
+    }
+
+    // ── Seek count and seek buffer tracking ─────────────────────────────────
+
+    #[test]
+    fn seek_count_increments_on_every_seek_start() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        s.process_event(PlayerEvent::SeekEnd { to_ms: 30_000, buffer_ready: true }, 5_200);
+        let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 30_000 }, 10_000);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_count, 2);
+    }
+
+    #[test]
+    fn seek_count_increments_from_paused() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 5_000);
+        let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 6_000);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_count, 1);
+    }
+
+    #[test]
+    fn seek_buffer_count_increments_on_seek_into_empty_buffer() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        let beacons = s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        // beacons[0] = seek_end, beacons[1] = stall (seek_buffer_count incremented before stall beacon)
+        let m = beacons[1].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_count, 1);
+    }
+
+    #[test]
+    fn seek_buffer_ms_accumulates_seek_induced_stall() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        // SeekEnd into empty buffer at t=5200 → enter Rebuffering (seek-induced)
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        // Recover at t=7200 → 2000 ms of seek-buffer stall
+        let beacons = s.process_event(PlayerEvent::Playing, 7_200);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_ms, 2_000);
+    }
+
+    #[test]
+    fn rebuffer_count_not_incremented_by_seek_into_empty_buffer() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        let beacons = s.process_event(PlayerEvent::Playing, 7_200);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.rebuffer_count, 0);
+    }
+
+    #[test]
+    fn rebuffer_ms_not_accumulated_by_seek_into_empty_buffer() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        let beacons = s.process_event(PlayerEvent::Playing, 7_200);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.rebuffer_ms, 0);
+    }
+
+    #[test]
+    fn seek_buffer_not_affected_by_mid_playback_stall() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Stall, 5_000);
+        let beacons = s.process_event(PlayerEvent::Playing, 7_000);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_ms, 0);
+        assert_eq!(m.seek_buffer_count, 0);
+    }
+
+    #[test]
+    fn metrics_reset_on_new_session() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        // Accumulate seek metrics
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        s.process_event(PlayerEvent::Playing, 7_200);
+        // End session and start a new one
+        s.process_event(PlayerEvent::Ended, 10_000);
+        reach_playing(&mut s, 11_000);
+        let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 0 }, 12_000);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_ms, 0);
+        assert_eq!(m.seek_buffer_count, 0);
+        assert_eq!(m.seek_count, 1); // only the new seek
+    }
+
+    #[test]
+    fn seek_buffer_ms_stops_on_pause_during_seek_stall() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        // Enter seek-induced rebuffering at t=5200
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        // Pause at t=6200 → 1000 ms of seek-buffer stall; emits [stall_end, pause]
+        let beacons = s.process_event(PlayerEvent::Pause, 6_200);
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_ms, 1_000);
+        // seek_buffer_ms must not grow further — destroy at t=9200 (3s later)
+        let beacons2 = s.destroy(9_200);
+        let m2 = beacons2[0].metrics.as_ref().unwrap();
+        assert_eq!(m2.seek_buffer_ms, 1_000);
+    }
+
+    #[test]
+    fn seek_buffer_ms_stops_on_seek_during_seek_stall() {
+        let mut s = make_session();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::SeekStart { from_ms: 5_000 }, 5_000);
+        // Enter seek-induced rebuffering at t=5200
+        s.process_event(
+            PlayerEvent::SeekEnd { to_ms: 60_000, buffer_ready: false },
+            5_200,
+        );
+        // User seeks again at t=6200 → stall_end + seek_start; 1000 ms of seek-buffer stall
+        let beacons = s.process_event(PlayerEvent::SeekStart { from_ms: 60_000 }, 6_200);
+        // beacons[0] = stall_end, beacons[1] = seek_start
+        let m = beacons[0].metrics.as_ref().unwrap();
+        assert_eq!(m.seek_buffer_ms, 1_000);
     }
 }
