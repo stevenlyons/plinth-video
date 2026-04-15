@@ -71,6 +71,9 @@ export interface Metrics {
   watched_ms: number;
   rebuffer_count: number;
   error_count: number;
+  seek_buffer_ms: number;
+  seek_buffer_count: number;
+  seek_count: number;
 }
 
 export interface Beacon {

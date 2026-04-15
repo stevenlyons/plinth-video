@@ -40,6 +40,9 @@ data class Metrics(
     @SerialName("watched_ms") val watchedMs: Long,
     @SerialName("rebuffer_count") val rebufferCount: Int,
     @SerialName("error_count") val errorCount: Int,
+    @SerialName("seek_buffer_ms") val seekBufferMs: Long,
+    @SerialName("seek_buffer_count") val seekBufferCount: Int,
+    @SerialName("seek_count") val seekCount: Int,
 )
 
 @Serializable
