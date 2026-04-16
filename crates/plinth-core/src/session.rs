@@ -413,6 +413,14 @@ impl Session {
                 match next_state {
                     PlayerState::Playing => {
                         self.played_tracker.start(now_ms);
+                        let m2 = self.snapshot_metrics(now_ms);
+                        let b2 = self.make_beacon(
+                            BeaconEvent::Playing,
+                            Some(PlayerState::Playing),
+                            Some(m2),
+                            now_ms,
+                        );
+                        out.push(b2);
                     }
                     PlayerState::Rebuffering => {
                         self.seek_buffer_tracker.start(now_ms);
@@ -843,12 +851,14 @@ mod tests {
             11_400,
         );
         assert_eq!(s.state(), PlayerState::Playing);
-        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons.len(), 2);
         let se = &beacons[0];
         assert_eq!(se.event, BeaconEvent::SeekEnd);
         assert_eq!(se.state, Some(PlayerState::Playing));
         assert_eq!(se.seek_from_ms, Some(10_000));
         assert_eq!(se.seek_to_ms, Some(60_000));
+        assert_eq!(beacons[1].event, BeaconEvent::Playing);
+        assert_eq!(beacons[1].state, Some(PlayerState::Playing));
     }
 
     #[test]

@@ -235,9 +235,6 @@ export class PlinthDashjs {
           });
           this._pendingSeekFrom = null;
         }
-        if (!this.video.paused && !this.video.ended) {
-          this.emit({ type: "playing" });
-        }
       }, 300);
     };
     this.video.addEventListener("seeked", onSeeked);
