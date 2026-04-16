@@ -17,7 +17,7 @@ pub struct Metrics {
     pub seek_buffer_ms: u64,
     /// Number of seeks that resulted in buffering (Seeking → Rebuffering).
     pub seek_buffer_count: u32,
-    /// Total seek events initiated during the session (SeekStart events).
+    /// Total seek events initiated during the session (Seek events).
     pub seek_count: u32,
 }
 

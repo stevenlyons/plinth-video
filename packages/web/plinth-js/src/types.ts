@@ -10,7 +10,7 @@ export type PlayerEvent =
   | { type: "first_frame" }
   | { type: "playing" }
   | { type: "pause" }
-  | { type: "seek_start"; from_ms: number }
+  | { type: "seek"; from_ms: number }
   | { type: "seek_end"; to_ms: number; buffer_ready: boolean }
   | { type: "ended" }
   | { type: "error"; code: string; message?: string; fatal: boolean }

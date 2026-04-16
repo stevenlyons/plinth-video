@@ -246,9 +246,9 @@ describe("PlinthDashjs", () => {
     mock.timers.tick(300);
 
     const seekCall = mockSession.processEvent.mock.calls.find(
-      (c) => (c.arguments[0] as any).type === "seek_start",
+      (c) => (c.arguments[0] as any).type === "seek",
     );
-    assert.deepStrictEqual(seekCall?.arguments[0], { type: "seek_start", from_ms: 5_000 });
+    assert.deepStrictEqual(seekCall?.arguments[0], { type: "seek", from_ms: 5_000 });
   });
 
   // 11. seek completes while playing → playing event emitted
@@ -408,7 +408,7 @@ describe("PlinthDashjs", () => {
     video.fire("timeupdate");
     video.fire("seeking");
 
-    assertCalledWith(mockSession.processEvent, { type: "seek_start", from_ms: 5_000 });
+    assertCalledWith(mockSession.processEvent, { type: "seek", from_ms: 5_000 });
     const hasPlaying = mockSession.processEvent.mock.calls.some(
       (c) => (c.arguments[0] as any).type === "playing",
     );
@@ -426,7 +426,7 @@ describe("PlinthDashjs", () => {
     video.fire("seeked");
     mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, { type: "seek_start", from_ms: 5_000 });
+    assertCalledWith(mockSession.processEvent, { type: "seek", from_ms: 5_000 });
     assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
@@ -443,7 +443,7 @@ describe("PlinthDashjs", () => {
     mock.timers.tick(300);
 
     const seekStartCalls = mockSession.processEvent.mock.calls.filter(
-      (c) => (c.arguments[0] as any).type === "seek_start",
+      (c) => (c.arguments[0] as any).type === "seek",
     );
     assert.strictEqual(seekStartCalls.length, 1, "exactly one seek_start for entire scrub");
   });
@@ -462,9 +462,9 @@ describe("PlinthDashjs", () => {
     mock.timers.tick(300);
 
     const seekStartCall = mockSession.processEvent.mock.calls.find(
-      (c) => (c.arguments[0] as any).type === "seek_start",
+      (c) => (c.arguments[0] as any).type === "seek",
     );
-    assert.deepStrictEqual(seekStartCall?.arguments[0], { type: "seek_start", from_ms: 5_000 });
+    assert.deepStrictEqual(seekStartCall?.arguments[0], { type: "seek", from_ms: 5_000 });
   });
 
   // 26. stall fires normally after debounce has settled

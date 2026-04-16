@@ -180,7 +180,7 @@ export class PlinthShaka {
     const onSeeking: EventListener = () => {
       if (this._pendingSeekFrom === null) {
         this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
-        this.emit({ type: "seek_start", from_ms: this._pendingSeekFrom });
+        this.emit({ type: "seek", from_ms: this._pendingSeekFrom });
       }
       this.isSeeking = true;
       clearTimeout(this._seekDebounceTimer!);
