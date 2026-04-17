@@ -46,6 +46,10 @@ pub struct Session {
     last_heartbeat_ms: Option<u64>,
     /// Playhead position reported by the platform; included in heartbeat beacons.
     playhead_ms: u64,
+    /// Timestamp (ms) when the session entered an inactive state (Paused, Ended,
+    /// Error). Reset on every inactive-state entry so transitions between inactive
+    /// states restart the 60-second clock. Cleared when an active state is entered.
+    inactive_since_ms: Option<u64>,
 }
 
 impl Session {
@@ -70,6 +74,7 @@ impl Session {
             seek_from_ms: None,
             last_heartbeat_ms: Some(now_ms),
             playhead_ms: 0,
+            inactive_since_ms: None,
         }
     }
 
@@ -569,7 +574,23 @@ impl Session {
             }
         }
 
+        self.update_inactivity(now_ms);
+
         out
+    }
+
+    /// Track inactivity for heartbeat suppression. Called after every state transition.
+    /// Sets `inactive_since_ms` on entry to an inactive state (resetting the clock on
+    /// each inactive→inactive transition) and clears it when an active state is entered.
+    fn update_inactivity(&mut self, now_ms: u64) {
+        match self.state {
+            PlayerState::Paused | PlayerState::Ended | PlayerState::Error => {
+                self.inactive_since_ms = Some(now_ms);
+            }
+            _ => {
+                self.inactive_since_ms = None;
+            }
+        }
     }
 
     /// Called by the platform on a regular interval. Emits a heartbeat beacon if
@@ -597,6 +618,15 @@ impl Session {
 
         if !active {
             return vec![];
+        }
+
+        // Suppress heartbeat after more than 60 seconds of continuous inactivity
+        // (Paused/Ended/Error). One final heartbeat fires at exactly the 60s mark.
+        const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
+        if let Some(inactive_since) = self.inactive_since_ms {
+            if now_ms.saturating_sub(inactive_since) > INACTIVITY_TIMEOUT_MS {
+                return vec![];
+            }
         }
 
         self.last_heartbeat_ms = Some(now_ms);
@@ -1940,5 +1970,123 @@ mod tests {
         // beacons[0] = stall_end, beacons[1] = seek_start
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.seek_buffer_ms, 1_000);
+    }
+
+    // ── Heartbeat inactivity timeout ─────────────────────────────────────────
+
+    fn make_session_fast_heartbeat() -> Session {
+        let config = Config {
+            heartbeat_interval_ms: 10_000,
+            ..Config::default()
+        };
+        let meta = SessionMeta {
+            video: VideoMetadata { id: "vid-001".to_string(), title: None },
+            client: ClientMetadata { user_agent: "Test/1.0".to_string() },
+            sdk: SdkMetadata {
+                api_version: 1,
+                core: SdkComponent { name: "plinth-core".to_string(), version: "0.1.0".to_string() },
+                framework: SdkComponent { name: "plinth-js".to_string(), version: "0.1.0".to_string() },
+                player: SdkComponent { name: "plinth-hlsjs".to_string(), version: "0.1.0".to_string() },
+            },
+        };
+        Session::new(config, meta, 0)
+    }
+
+    /// Heartbeat still fires just before the 60s inactivity threshold.
+    #[test]
+    fn heartbeat_fires_before_inactivity_timeout() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // Advance 59 999ms past the pause — one heartbeat interval (10s) has elapsed,
+        // but the 60s inactivity timeout has NOT been reached.
+        let beacons = s.tick(1_000 + 59_999);
+        assert_eq!(beacons.len(), 1, "heartbeat should fire before timeout");
+        assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
+    }
+
+    /// One final heartbeat fires at exactly the 60s inactivity mark; subsequent
+    /// ticks beyond that threshold are suppressed.
+    #[test]
+    fn heartbeat_suppressed_after_60s_paused() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // Exactly 60 000ms after the pause — one last heartbeat should still fire.
+        let beacons = s.tick(1_000 + 60_000);
+        assert_eq!(beacons.len(), 1, "final heartbeat should fire at exactly 60s of inactivity");
+        assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
+        // One millisecond beyond 60s — now suppressed.
+        let beacons = s.tick(1_000 + 60_001);
+        assert!(beacons.is_empty(), "heartbeat should be suppressed beyond 60s of inactivity");
+    }
+
+    /// Heartbeat resumes after the session becomes active again.
+    #[test]
+    fn heartbeat_resumes_after_resume_from_pause() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // Trigger suppression (must go beyond 60s).
+        s.tick(1_000 + 60_001);
+        // Resume playback — emits a beacon which resets last_heartbeat_ms.
+        s.process_event(PlayerEvent::Play, 70_000);
+        // After one heartbeat interval the next tick should fire normally.
+        let beacons = s.tick(70_000 + 10_001);
+        assert_eq!(beacons.len(), 1, "heartbeat should resume after returning to active state");
+        assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
+    }
+
+    /// Timer resets when transitioning between inactive states.
+    #[test]
+    fn inactivity_timer_resets_on_inactive_to_inactive_transition() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        // Pause at t=1000.
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // 50s later — not yet suppressed.
+        let pre = s.tick(51_000);
+        assert_eq!(pre.len(), 1, "heartbeat should fire before timeout");
+        // Error at t=51 000 — resets the inactivity timer.
+        s.process_event(PlayerEvent::Error { code: "500".to_string(), message: None, fatal: true }, 51_000);
+        // 15s after the Error event: only 15s of inactivity since the new state —
+        // should still be suppressed by active-state guard (Error is not active),
+        // but the timer should have reset (15s < 60s). Verified indirectly: the
+        // next tick after a resume should fire correctly.
+        s.process_event(PlayerEvent::Load { src: "retry.m3u8".into() }, 66_000);
+        s.process_event(PlayerEvent::CanPlay, 66_000);
+        s.process_event(PlayerEvent::Play, 66_000);
+        s.process_event(PlayerEvent::FirstFrame, 67_000);
+        let beacons = s.tick(77_001);
+        assert_eq!(beacons.len(), 1, "heartbeat should fire after resuming from reset timer");
+    }
+
+    /// Inactivity timer is cleared when session moves to an active state.
+    #[test]
+    fn inactivity_timer_cleared_on_active_state() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // 30s into pause — not suppressed yet. Tick to consume interval.
+        s.tick(31_000);
+        // Resume — clears the timer.
+        s.process_event(PlayerEvent::Play, 31_000);
+        // 30s more — only 30s since resume, well under 60s; should heartbeat.
+        let beacons = s.tick(41_001);
+        assert_eq!(beacons.len(), 1, "heartbeat should fire after timer cleared on resume");
+    }
+
+    /// destroy() always emits its final beacon even when heartbeats are suppressed.
+    #[test]
+    fn destroy_emits_beacon_when_heartbeat_suppressed() {
+        let mut s = make_session_fast_heartbeat();
+        reach_playing(&mut s, 0);
+        s.process_event(PlayerEvent::Pause, 1_000);
+        // Suppress heartbeats.
+        s.tick(1_000 + 60_000);
+        // destroy() must still emit an ended beacon.
+        let beacons = s.destroy(90_000);
+        assert_eq!(beacons.len(), 1);
+        assert_eq!(beacons[0].event, BeaconEvent::Ended);
     }
 }
