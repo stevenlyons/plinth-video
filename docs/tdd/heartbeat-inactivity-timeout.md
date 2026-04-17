@@ -2,7 +2,7 @@
 
 ## Overview
 
-Heartbeats currently fire indefinitely in the `Paused` state (the only inactive state where heartbeats are currently emitted; `Ended` and `Error` already suppress them via the existing active-state guard). This change adds an inactivity timer inside `plinth-core`: when the session has been in `Paused` continuously for 60 seconds, heartbeat emission is suppressed. Heartbeats resume immediately when any player event moves the session back to an active state. No platform-layer changes are required — the platforms keep calling `tick()` on their existing schedules and receive empty responses when suppressed.
+This change adds an inactivity timer inside `plinth-core`: when the session has been in an inactive state (`Paused`, `Ended`, or `Error`) continuously for more than 60 seconds, heartbeat emission is suppressed. A final heartbeat fires at exactly the 60-second mark; ticks beyond that threshold are no-ops until the session returns to an active state. No platform-layer changes are required — the platforms keep calling `tick()` on their existing schedules and receive empty responses when suppressed.
 
 ---
 
@@ -41,10 +41,10 @@ Pre-playback states (`Idle`, `Loading`, `Ready`, `PlayAttempt`) do not participa
 ### Inactivity timeout constant
 
 ```rust
-const HEARTBEAT_INACTIVITY_TIMEOUT_MS: u64 = 60_000;
+const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
 ```
 
-Defined as a module-level constant in `session.rs`. Not configurable in this release.
+Defined as a local constant inside `tick()`. Not configurable in this release.
 
 ---
 
@@ -53,9 +53,9 @@ Defined as a module-level constant in `session.rs`. Not configurable in this rel
 ### Entering an inactive state (Paused)
 
 1. `process_event` drives a state transition to `Paused`.
-2. Before returning, `inactive_since_ms` is set to `now_ms` if not already set.
-3. Heartbeat interval continues normally. Each `tick(now_ms)` call computes elapsed = `now_ms − inactive_since_ms`. While elapsed < 60 000ms, heartbeats fire as usual.
-4. Once elapsed ≥ 60 000ms, `tick` returns `vec![]` — no beacon, no update to `last_heartbeat_ms`.
+2. Before returning, `update_inactivity(now_ms)` sets `inactive_since_ms = Some(now_ms)`.
+3. Heartbeat interval continues normally. Each `tick(now_ms)` call computes elapsed = `now_ms − inactive_since_ms`. While elapsed ≤ 60 000ms, heartbeats fire as usual (one final heartbeat fires at exactly the 60s mark).
+4. Once elapsed > 60 000ms, `tick` returns `vec![]` — no beacon, no update to `last_heartbeat_ms`.
 
 ### Resuming from Paused (e.g., play pressed)
 
@@ -94,9 +94,9 @@ After each state transition, add:
 fn update_inactivity(&mut self, now_ms: u64) {
     match self.state {
         PlayerState::Paused | PlayerState::Ended | PlayerState::Error => {
-            if self.inactive_since_ms.is_none() {
-                self.inactive_since_ms = Some(now_ms);
-            }
+            // Reset on every entry into an inactive state so that transitions
+            // between inactive states (e.g. Paused → Ended) restart the clock.
+            self.inactive_since_ms = Some(now_ms);
         }
         _ => {
             self.inactive_since_ms = None;
@@ -107,24 +107,14 @@ fn update_inactivity(&mut self, now_ms: u64) {
 
 Call `self.update_inactivity(now_ms)` at the end of `process_event`, after the state field is updated and beacons are collected.
 
-**Important:** When transitioning from one inactive state to another (e.g., `Paused → Ended`), the existing guard sets `inactive_since_ms` only when `None`. To reset the timer on a transition between inactive states, use:
-
-```rust
-PlayerState::Paused | PlayerState::Ended | PlayerState::Error => {
-    // Reset on every transition into an inactive state, not just the first
-    self.inactive_since_ms = Some(now_ms);
-}
-```
-
-This is the correct behavior per the PRD.
-
 ### `Session::tick` — add inactivity suppression
 
 After the existing active-state guard, add:
 
 ```rust
+const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
 if let Some(inactive_since) = self.inactive_since_ms {
-    if now_ms.saturating_sub(inactive_since) >= HEARTBEAT_INACTIVITY_TIMEOUT_MS {
+    if now_ms.saturating_sub(inactive_since) > INACTIVITY_TIMEOUT_MS {
         return vec![];
     }
 }
@@ -157,9 +147,11 @@ pub fn tick(&mut self, now_ms: u64) -> Vec<Beacon> {
         return vec![];
     }
 
-    // Suppress heartbeat if the session has been inactive for too long
+    // Suppress heartbeat after more than 60s of continuous inactivity.
+    // One final heartbeat fires at exactly the 60s mark.
+    const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
     if let Some(inactive_since) = self.inactive_since_ms {
-        if now_ms.saturating_sub(inactive_since) >= HEARTBEAT_INACTIVITY_TIMEOUT_MS {
+        if now_ms.saturating_sub(inactive_since) > INACTIVITY_TIMEOUT_MS {
             return vec![];
         }
     }
@@ -189,12 +181,12 @@ All new tests go in `crates/plinth-core/tests/` (or alongside existing session t
 
 | Test | Scenario | Assertion |
 |---|---|---|
-| `heartbeat_suppressed_after_60s_paused` | Pause session; advance time 59 999ms; tick → heartbeat emitted. Advance 1ms more; tick → no heartbeat. | Pass/fail on beacon count |
-| `heartbeat_resumes_after_resume_from_pause` | Pause; advance 65s (suppress); emit play event; advance heartbeat_interval_ms; tick → heartbeat emitted | Beacon present |
-| `inactivity_timer_resets_on_transition_between_inactive_states` | Pause at t=0; advance 50s; end session (Ended) at t=50s; advance 15s; tick → no beacon (only 15s since Ended, well under 60s) | Beacon absent (only 15s elapsed since Ended, but Ended is also not in active set — verify timer reset, not beacon) |
-| `inactivity_timer_cleared_on_active_state` | Pause at t=0; advance 30s; resume play; advance 30s more; tick → heartbeat (timer reset on resume, 30s < 60s) | Beacon present |
-| `heartbeat_fires_normally_during_first_59s_of_pause` | Pause; advance 10s; tick → heartbeat. Advance 10s; tick → heartbeat. (× 5) 6th tick at 60s → suppressed | 5 heartbeats, 6th suppressed |
-| `destroy_always_emits_regardless_of_suppression` | Pause; advance 65s (suppress); call destroy → beacon returned | Beacon present |
+| `heartbeat_fires_before_inactivity_timeout` | Pause at t=1000; tick at t=60 999 (59 999ms elapsed, within interval) → heartbeat emitted | Beacon present |
+| `heartbeat_suppressed_after_60s_paused` | Pause at t=1000; tick at t=61 000 (exactly 60 000ms elapsed) → one final heartbeat. Tick at t=61 001 (60 001ms elapsed) → suppressed | Final heartbeat at 60s; empty at 60 001ms |
+| `heartbeat_resumes_after_resume_from_pause` | Pause; suppress via tick at 60 001ms; emit play event; tick after one interval → heartbeat | Beacon present |
+| `inactivity_timer_resets_on_inactive_to_inactive_transition` | Pause at t=1000; tick at t=51 000 (heartbeat fires); Error event at t=51 000 (resets timer); resume via Load→Play→FirstFrame at t=66 000; tick at t=77 001 → heartbeat | Beacon present after reset |
+| `inactivity_timer_cleared_on_active_state` | Pause at t=0; tick at t=31 000; resume play at t=31 000; tick at t=41 001 (only 10s since interval reset) → heartbeat | Beacon present |
+| `destroy_emits_beacon_when_heartbeat_suppressed` | Pause; suppress via tick at 60 001ms; call destroy → ended beacon returned | Beacon present |
 
 ### Regression
 

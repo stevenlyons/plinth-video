@@ -620,10 +620,11 @@ impl Session {
             return vec![];
         }
 
-        // Suppress heartbeat after 60 seconds of continuous inactivity (Paused/Ended/Error).
+        // Suppress heartbeat after more than 60 seconds of continuous inactivity
+        // (Paused/Ended/Error). One final heartbeat fires at exactly the 60s mark.
         const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
         if let Some(inactive_since) = self.inactive_since_ms {
-            if now_ms.saturating_sub(inactive_since) >= INACTIVITY_TIMEOUT_MS {
+            if now_ms.saturating_sub(inactive_since) > INACTIVITY_TIMEOUT_MS {
                 return vec![];
             }
         }
@@ -2004,15 +2005,20 @@ mod tests {
         assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
     }
 
-    /// Heartbeat is suppressed at exactly the 60s inactivity threshold.
+    /// One final heartbeat fires at exactly the 60s inactivity mark; subsequent
+    /// ticks beyond that threshold are suppressed.
     #[test]
     fn heartbeat_suppressed_after_60s_paused() {
         let mut s = make_session_fast_heartbeat();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 1_000);
-        // 60 000ms after the pause event the heartbeat should be suppressed.
+        // Exactly 60 000ms after the pause — one last heartbeat should still fire.
         let beacons = s.tick(1_000 + 60_000);
-        assert!(beacons.is_empty(), "heartbeat should be suppressed at 60s of inactivity");
+        assert_eq!(beacons.len(), 1, "final heartbeat should fire at exactly 60s of inactivity");
+        assert_eq!(beacons[0].event, BeaconEvent::Heartbeat);
+        // One millisecond beyond 60s — now suppressed.
+        let beacons = s.tick(1_000 + 60_001);
+        assert!(beacons.is_empty(), "heartbeat should be suppressed beyond 60s of inactivity");
     }
 
     /// Heartbeat resumes after the session becomes active again.
@@ -2021,8 +2027,8 @@ mod tests {
         let mut s = make_session_fast_heartbeat();
         reach_playing(&mut s, 0);
         s.process_event(PlayerEvent::Pause, 1_000);
-        // Trigger suppression.
-        s.tick(1_000 + 60_000);
+        // Trigger suppression (must go beyond 60s).
+        s.tick(1_000 + 60_001);
         // Resume playback — emits a beacon which resets last_heartbeat_ms.
         s.process_event(PlayerEvent::Play, 70_000);
         // After one heartbeat interval the next tick should fire normally.
