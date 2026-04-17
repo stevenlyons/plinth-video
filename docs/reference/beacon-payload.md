@@ -36,8 +36,7 @@ All beacons in a batch belong to the same `play_id` and are ordered by ascending
 | `first_frame` | First video frame renders. VST is now known. | — |
 | `playing` | Video is actively playing: emitted immediately after `first_frame` (same timestamp), after stall recovery, and after resuming from pause. | — |
 | `pause` | Playback paused by user or system. | — |
-| `seek_start` | Seek begins. | `seek_from_ms` |
-| `seek_end` | Seek completes. | `seek_from_ms`, `seek_to_ms` |
+| `seek` | Seek begins (debounced: fires once per gesture, at the start). | `seek_from_ms` |
 | `stall` | Buffer exhausted mid-playback (after first frame); player is stalling. | — |
 | `quality_change` | ABR rendition switch while playing. | `quality` |
 | `error` | Player error, fatal or non-fatal. Fatal errors end the session. | `error` |
@@ -69,7 +68,7 @@ Present on all beacons except `play` (seq=0). Each beacon carries the full cumul
 | `error_count` | integer | Total errors emitted (fatal and non-fatal). |
 | `seek_buffer_ms` | integer | Cumulative ms spent buffering after seeks (`Seeking → Rebuffering` only). |
 | `seek_buffer_count` | integer | Number of seeks that resulted in buffering (`Seeking → Rebuffering` transitions). |
-| `seek_count` | integer | Total seek events initiated during the session (`SeekStart` events). |
+| `seek_count` | integer | Total seek events initiated during the session (`seek` events). |
 
 ---
 
@@ -89,7 +88,7 @@ Present on all beacons except `play` (seq=0). Each beacon carries the full cumul
 
 ## Seek fields
 
-`seek_from_ms` and `seek_to_ms` are present on `seek_start` and `seek_end` respectively (both present on `seek_end`). All values are milliseconds in the content timeline.
+`seek_from_ms` is present on `seek` beacons. It is the playhead position (in milliseconds) recorded immediately before the seek gesture began. All values are milliseconds in the content timeline.
 
 ---
 

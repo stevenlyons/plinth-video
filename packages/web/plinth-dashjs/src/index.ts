@@ -36,17 +36,6 @@ interface DashjsPlayer {
   getCurrentRepresentationForType(type: "video"): DashjsRepresentation | null;
 }
 
-function isBufferReady(video: HTMLVideoElement): boolean {
-  const buffered = video.buffered;
-  const ct = video.currentTime;
-  for (let i = 0; i < buffered.length; i++) {
-    if (buffered.start(i) <= ct && ct <= buffered.end(i)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // MPEG-DASH frameRate can be a fraction string like "30000/1001"
 function parseFrameRate(fr: number | string | null | undefined): string | undefined {
   if (fr == null) return undefined;
@@ -61,6 +50,8 @@ export class PlinthDashjs {
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
   private isSeeking = false;
+  private _pendingSeekFrom: number | null = null;
+  private _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastQualityBandwidth: number | null = null;
   private destroyed = false;
   private playerHandlers = new Map<string, (e?: unknown) => void>();
@@ -101,6 +92,9 @@ export class PlinthDashjs {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+
+    clearTimeout(this._seekDebounceTimer!);
+    this._seekDebounceTimer = null;
 
     for (const [event, handler] of this.playerHandlers) {
       this.player.off(event, handler);
@@ -181,7 +175,7 @@ export class PlinthDashjs {
         this.hasFiredFirstFrame = true;
         this.emit({ type: "first_frame" });
       } else if (!this.isSeeking) {
-        this.emit({ type: "playing" });
+        this.emit({ type: "playing" });  // suppressed during seek; replayed from debounce callback
       }
     };
     this.video.addEventListener("playing", onPlaying);
@@ -189,7 +183,7 @@ export class PlinthDashjs {
 
     const onWaiting: EventListener = () => {
       if (this.hasFiredFirstFrame) {
-        this.emit({ type: "stall" });
+        if (!this.isSeeking) this.emit({ type: "stall" });
       } else {
         this.emit({ type: "waiting" });
       }
@@ -204,27 +198,30 @@ export class PlinthDashjs {
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
-    let _pendingSeekFrom: number | null = null;
     const onSeeking: EventListener = () => {
+      if (this._pendingSeekFrom === null) {
+        this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
+        this.emit({ type: "seek", from_ms: this._pendingSeekFrom });
+      }
       this.isSeeking = true;
-      _pendingSeekFrom = Math.round(this.lastPlayheadMs);
+      clearTimeout(this._seekDebounceTimer!);
+      this._seekDebounceTimer = null;
     };
     this.video.addEventListener("seeking", onSeeking);
     this.videoHandlers.set("seeking", onSeeking);
 
     const onSeeked: EventListener = () => {
-      this.isSeeking = false;
-      const seekTo = Math.round(this.video.currentTime * 1000);
-      const seekDistance = Math.abs(seekTo - (_pendingSeekFrom ?? 0));
-      if (seekDistance > 250) {
-        this.emit({ type: "seek_start", from_ms: _pendingSeekFrom! });
-        this.emit({
-          type: "seek_end",
-          to_ms: seekTo,
-          buffer_ready: isBufferReady(this.video),
-        });
-      }
-      _pendingSeekFrom = null;
+      clearTimeout(this._seekDebounceTimer!);
+      this._seekDebounceTimer = setTimeout(() => {
+        this._seekDebounceTimer = null;
+        this.isSeeking = false;
+        if (this._pendingSeekFrom !== null) {
+          this._pendingSeekFrom = null;
+          if (!this.video.paused) {
+            this.emit({ type: "playing" });
+          }
+        }
+      }, 300);
     };
     this.video.addEventListener("seeked", onSeeked);
     this.videoHandlers.set("seeked", onSeeked);

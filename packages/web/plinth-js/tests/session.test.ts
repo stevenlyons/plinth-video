@@ -157,11 +157,11 @@ describe("PlinthSession", () => {
 
     it("serializes seek_start event with from_ms field", async () => {
       const session = await PlinthSession.create(DEFAULT_META, DEFAULT_CONFIG, mockWasmModule);
-      session.processEvent({ type: "seek_start", from_ms: 15_000 });
+      session.processEvent({ type: "seek", from_ms: 15_000 });
 
       const [eventArg] = mockWasmSession._mocks.process_event.mock.calls[0].arguments as [string];
       const parsedEvent = JSON.parse(eventArg);
-      assert.strictEqual(parsedEvent.type, "seek_start");
+      assert.strictEqual(parsedEvent.type, "seek");
       assert.strictEqual(parsedEvent.from_ms, 15_000);
 
       session.destroy();

@@ -101,9 +101,11 @@ describe("PlinthHlsJs", () => {
     video = new FakeVideo();
     mockSession = makeMockSession();
     instance = null;
+    mock.timers.enable(["setTimeout"]);
   });
 
   afterEach(() => {
+    mock.timers.reset();
     instance?.destroy();
     instance = null;
   });
@@ -153,12 +155,12 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.processEvent, { type: "first_frame" });
   });
 
-  // 4b. video playing (subsequent) → playing
+  // 4b. video playing (subsequent, not seeking) → playing
   it("video 'playing' (subsequent) → processEvent({ type:'playing' })", async () => {
     instance = await setup(hls, video, mockSession);
     video.fire("playing"); // first_frame
     mockSession.processEvent.mock.resetCalls();
-    video.fire("playing"); // playing
+    video.fire("playing"); // playing (isSeeking=false by default)
 
     assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
@@ -215,7 +217,7 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.setPlayhead, 12_500);
   });
 
-  // 10. seek > 500ms → seek_start emitted on seeked with lastPlayheadMs as from_ms
+  // 10. seek > 500ms → seek_start emitted after debounce with lastPlayheadMs as from_ms
   it("seek > 500ms → seek_start { from_ms } and seek_end emitted on seeked", async () => {
     instance = await setup(hls, video, mockSession);
     video.currentTime = 5.0;
@@ -223,47 +225,37 @@ describe("PlinthHlsJs", () => {
     video.fire("seeking");       // _pendingSeekFrom = 5000
     video.currentTime = 10.0;   // seeked to 10s (distance = 5000 > 500)
     video.fire("seeked");
+    mock.timers.tick(300);
 
     const seekCall = mockSession.processEvent.mock.calls.find(
-      (c) => (c.arguments[0] as any).type === "seek_start",
+      (c) => (c.arguments[0] as any).type === "seek",
     );
-    assert.deepStrictEqual(seekCall?.arguments[0], { type: "seek_start", from_ms: 5_000 });
+    assert.deepStrictEqual(seekCall?.arguments[0], { type: "seek", from_ms: 5_000 });
   });
 
-  // 11. video seeked (buffer ready) → seek_end buffer_ready:true
-  it("video 'seeked' with buffer ready → seek_end { buffer_ready: true }", async () => {
+  // 11. seek completes while playing → playing event emitted
+  it("seek completes while video playing → processEvent({ type:'playing' })", async () => {
     instance = await setup(hls, video, mockSession);
-    video.currentTime = 5.0;
-    video.buffered = {
-      length: 1,
-      start: (_i: number) => 0,
-      end: (_i: number) => 10,
-    } as unknown as TimeRanges;
+    video.paused = false;
+    video.fire("seeking");
     video.fire("seeked");
+    mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, {
-      type: "seek_end",
-      to_ms: 5_000,
-      buffer_ready: true,
-    });
+    assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
-  // 12. video seeked (buffer empty) → seek_end buffer_ready:false
-  it("video 'seeked' with buffer empty → seek_end { buffer_ready: false }", async () => {
+  // 12. seek completes while paused → playing event NOT emitted
+  it("seek completes while video paused → playing not emitted", async () => {
     instance = await setup(hls, video, mockSession);
-    video.currentTime = 15.0;
-    video.buffered = {
-      length: 1,
-      start: (_i: number) => 0,
-      end: (_i: number) => 10,
-    } as unknown as TimeRanges;
+    video.paused = true;
+    video.fire("seeking");
     video.fire("seeked");
+    mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, {
-      type: "seek_end",
-      to_ms: 15_000,
-      buffer_ready: false,
-    });
+    const playingCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "playing",
+    );
+    assert.strictEqual(playingCalls.length, 0, "playing must not emit when paused after seek");
   });
 
   // 13. LEVEL_SWITCHED → quality_change
@@ -357,56 +349,50 @@ describe("PlinthHlsJs", () => {
     assert.strictEqual(mockSession.destroy.mock.callCount(), 1);
   });
 
-  // 20. seeked: currentTime falls in first of multiple ranges → buffer_ready: true
-  it("seeked with multiple ranges — currentTime in first range → buffer_ready: true", async () => {
+  // 20. seek_end is never emitted
+  it("seek_end is never emitted (replaced by playing)", async () => {
     instance = await setup(hls, video, mockSession);
-    video.currentTime = 3.0;
-    // Two ranges: [0–5] and [10–20]
-    video.buffered = {
-      length: 2,
-      start: (i: number) => [0, 10][i],
-      end: (i: number) => [5, 20][i],
-    } as unknown as TimeRanges;
+    video.paused = false;
+    video.fire("seeking");
     video.fire("seeked");
+    mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, {
-      type: "seek_end",
-      to_ms: 3_000,
-      buffer_ready: true,
-    });
+    const seekEndCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "seek_end",
+    );
+    assert.strictEqual(seekEndCalls.length, 0, "seek_end must never be emitted");
   });
 
-  // 21. seeked: currentTime falls in gap between ranges → buffer_ready: false
-  it("seeked with multiple ranges — currentTime in gap → buffer_ready: false", async () => {
+  // 21. seeking followed by pause — no playing, no seek_end
+  it("seek then video paused — no playing or seek_end emitted", async () => {
     instance = await setup(hls, video, mockSession);
-    video.currentTime = 7.0;
-    // Two ranges: [0–5] and [10–20]; currentTime=7 is in the gap
-    video.buffered = {
-      length: 2,
-      start: (i: number) => [0, 10][i],
-      end: (i: number) => [5, 20][i],
-    } as unknown as TimeRanges;
+    video.paused = true;
+    video.fire("seeking");
     video.fire("seeked");
+    mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, {
-      type: "seek_end",
-      to_ms: 7_000,
-      buffer_ready: false,
+    const unwanted = mockSession.processEvent.mock.calls.filter((c) => {
+      const t = (c.arguments[0] as any).type;
+      return t === "seek_end" || t === "playing";
     });
+    assert.strictEqual(unwanted.length, 0, "neither seek_end nor playing when paused after seek");
   });
 
-  // 22. seeked: buffered is empty (length 0) → buffer_ready: false
-  it("seeked with empty buffered (length 0) → buffer_ready: false", async () => {
+  // 22. multiple seeks while paused — still no playing emitted
+  it("multiple seeks while paused — playing not emitted", async () => {
     instance = await setup(hls, video, mockSession);
-    video.currentTime = 5.0;
-    // FakeVideo.buffered defaults to length: 0
-    video.fire("seeked");
+    video.paused = true;
+    for (let t = 5; t <= 20; t += 5) {
+      video.fire("seeking");
+      video.currentTime = t;
+      video.fire("seeked");
+    }
+    mock.timers.tick(300);
 
-    assertCalledWith(mockSession.processEvent, {
-      type: "seek_end",
-      to_ms: 5_000,
-      buffer_ready: false,
-    });
+    const playingCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "playing",
+    );
+    assert.strictEqual(playingCalls.length, 0);
   });
 
   // 23. getPlayhead() delegates to session.getPlayhead()
@@ -428,5 +414,121 @@ describe("PlinthHlsJs", () => {
 
     assert.strictEqual(result, 0);
     assert.strictEqual(mockSession.getPlayhead.mock.callCount(), 0);
+  });
+
+  // ── Seek debounce ──────────────────────────────────────────────────────────
+
+  // 25. seek_start emits immediately on first seeking; playing deferred
+  it("seek_start emitted on seeking; playing not emitted until debounce fires", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.currentTime = 5.0;
+    video.fire("timeupdate");
+    video.fire("seeking");
+
+    assertCalledWith(mockSession.processEvent, { type: "seek", from_ms: 5_000 });
+    const hasPlaying = mockSession.processEvent.mock.calls.some(
+      (c) => (c.arguments[0] as any).type === "playing",
+    );
+    assert.ok(!hasPlaying, "playing must not emit before debounce window");
+  });
+
+  // 26. playing emits after 300ms debounce when video is playing
+  it("playing emitted after 300ms debounce fires (video not paused)", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.paused = false;
+    video.currentTime = 5.0;
+    video.fire("timeupdate");
+    video.fire("seeking");
+    video.currentTime = 10.0;
+    video.fire("seeked");
+    mock.timers.tick(300);
+
+    assertCalledWith(mockSession.processEvent, { type: "seek", from_ms: 5_000 });
+    assertCalledWith(mockSession.processEvent, { type: "playing" });
+  });
+
+  // 27. scrubbing emits exactly one seek for many seeking/seeked pairs
+  it("scrubbing (multiple seeking/seeked pairs) emits exactly one seek_start", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.currentTime = 5.0;
+    video.fire("timeupdate"); // lastPlayheadMs = 5000
+    // Rapid scrub: 5→10→15→20→25s
+    for (let t = 10; t <= 25; t += 5) {
+      video.fire("seeking");
+      video.currentTime = t;
+      video.fire("seeked");
+    }
+    mock.timers.tick(300);
+
+    const seekStartCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "seek",
+    );
+    assert.strictEqual(seekStartCalls.length, 1, "exactly one seek_start for entire scrub");
+  });
+
+  // 28. scrubbing preserves original seek origin across multiple seeking events
+  it("scrubbing: seek_start.from_ms is position before first seeking event", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.currentTime = 5.0;
+    video.fire("timeupdate"); // lastPlayheadMs = 5000 — the origin
+    video.fire("seeking");
+    video.currentTime = 10.0;
+    video.fire("seeked");
+    video.fire("seeking"); // second seeking during scrub — must not overwrite origin
+    video.currentTime = 20.0;
+    video.fire("seeked");
+    mock.timers.tick(300);
+
+    const seekStartCall = mockSession.processEvent.mock.calls.find(
+      (c) => (c.arguments[0] as any).type === "seek",
+    );
+    assert.deepStrictEqual(seekStartCall?.arguments[0], { type: "seek", from_ms: 5_000 });
+  });
+
+  // 29. stall suppressed while seeking is active
+  it("stall not emitted while seek debounce is pending", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // hasFiredFirstFrame = true
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("seeking");
+    video.fire("waiting"); // should be suppressed
+
+    const stallCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "stall",
+    );
+    assert.strictEqual(stallCalls.length, 0, "stall must not emit while seeking");
+  });
+
+  // 30. stall fires normally after debounce has settled
+  it("stall emits normally after seek debounce has settled", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // hasFiredFirstFrame = true
+    video.fire("seeking");
+    video.fire("seeked");
+    mock.timers.tick(300); // settle — isSeeking = false
+    mockSession.processEvent.mock.resetCalls();
+    video.fire("waiting");
+
+    assertCalledWith(mockSession.processEvent, { type: "stall" });
+  });
+
+  // 31. destroy() cancels pending debounce — playing not emitted after destroy
+  it("destroy() cancels pending seek debounce", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.paused = false;
+    video.currentTime = 5.0;
+    video.fire("timeupdate");
+    video.fire("seeking");  // seek_start emitted immediately
+    video.currentTime = 10.0;
+    video.fire("seeked");
+    instance.destroy();
+    instance = null;
+    mock.timers.tick(300);
+
+    // seek_start was emitted on seeking; playing must NOT fire after destroy
+    const playingCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "playing",
+    );
+    assert.strictEqual(playingCalls.length, 0, "playing must not fire after destroy");
   });
 });

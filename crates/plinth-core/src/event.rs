@@ -24,7 +24,7 @@ pub enum PlayerEvent {
     /// User or system paused: Playing/Rebuffering → Paused.
     Pause,
     /// Seek initiated. `from_ms` is the playhead position before the seek.
-    SeekStart { from_ms: u64 },
+    Seek { from_ms: u64 },
     /// Seek completed. `to_ms` is the final playhead position.
     /// `buffer_ready` determines whether seek_end resolves to Playing or Rebuffering
     /// when `pre_seek_state` was Playing.
@@ -107,7 +107,7 @@ impl<'a> miniserde::de::Map for PlayerEventMap<'a> {
             "first_frame" => PlayerEvent::FirstFrame,
             "playing" => PlayerEvent::Playing,
             "pause" => PlayerEvent::Pause,
-            "seek_start" => PlayerEvent::SeekStart {
+            "seek" => PlayerEvent::Seek {
                 from_ms: self.from_ms.take().ok_or(miniserde::Error)?,
             },
             "seek_end" => PlayerEvent::SeekEnd {

@@ -100,8 +100,8 @@ See `packages/web/plinth-shaka/tests/shaka.test.ts` for examples using `FakePlay
 | `<video> playing` (first time)        | `first_frame` — sets `hasFiredFirstFrame`                       |
 | `<video> playing` (subsequent)        | no-op (recovery handled by Shaka `buffering(false)`)            |
 | `<video> pause`                       | `pause` — suppressed when `video.ended` is true                 |
-| `<video> seeking`                     | `seek_start`                                                    |
-| `<video> seeked`                      | `seek_end`                                                      |
+| `<video> seeking` (first in gesture)  | `seek` — debounced; fires once per gesture with `from_ms`       |
+| `<video> seeked` (after 300ms)        | `playing` — emitted when debounce settles and video is playing  |
 | `<video> ended`                       | `ended`                                                         |
 | `<video> timeupdate`                  | updates playhead (heartbeat data)                               |
 | `<video> error`                       | `error` (fatal, codec / decode errors)                          |

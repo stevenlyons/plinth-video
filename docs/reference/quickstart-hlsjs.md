@@ -87,7 +87,7 @@ const plinth = await PlinthHlsJs.initialize(hls, video, videoMeta, {
 | `<video> waiting` (before first frame) | `waiting` — initial buffer stall (PlayAttempt → Buffering) |
 | `<video> waiting` (after first frame)  | `stall` — mid-playback buffer stall (Playing → Rebuffering) |
 | `<video> pause`               | `pause` — suppressed when `video.ended` is true       |
-| `<video> seeking`             | `seek_start`                                          |
-| `<video> seeked`              | `seek_end`                                            |
+| `<video> seeking` (first in gesture) | `seek` — debounced; fires once per gesture with `from_ms` |
+| `<video> seeked` (after 300ms) | `playing` — emitted when debounce settles and video is playing |
 | `<video> ended`               | `ended`                                               |
 | `<video> timeupdate`          | updates playhead (heartbeat data)                     |

@@ -161,13 +161,13 @@
   },
 
   "seek": {
-    "_label": "Batch 5 — user seeks forward while playing. seek_end lands back in playing state (buffer ready).",
+    "_label": "Batch 5 — user seeks forward while playing. seek fires at gesture start; playing fires when playback resumes.",
     "beacons": [
       {
         "seq": 7,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "ts": 1708646422100,
-        "event": "seek_start",
+        "event": "seek",
         "state": "seeking",
         "seek_from_ms": 20580,
         "metrics": {
@@ -185,16 +185,14 @@
       {
         "seq": 8,
         "play_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "ts": 1708646422480,
-        "event": "seek_end",
+        "ts": 1708646422780,
+        "event": "playing",
         "state": "playing",
-        "seek_from_ms": 20580,
-        "seek_to_ms": 60000,
         "metrics": {
           "vst_ms": 1280,
           "played_ms": 18440,
           "rebuffer_ms": 2100,
-          "watched_ms": 22480,
+          "watched_ms": 22780,
           "rebuffer_count": 1,
           "error_count": 0,
           "seek_buffer_ms": 0,

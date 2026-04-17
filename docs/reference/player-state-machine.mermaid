@@ -32,15 +32,17 @@ stateDiagram-v2
     %%  Ended → PlayAttempt [play() replay]         play  (seq=0; new session, new play_id)
     %%  PlayAttempt|Buffering → Playing [firstFrame] first_frame  +  playing  (same timestamp; VST now known)
     %%  Playing → Paused [pause()]                  pause
-    %%  Playing → Seeking [seekStart]               seek_start
+    %%  Playing → Seeking [seek]                    seek
     %%  Playing → Rebuffering [stall]               stall
     %%  Playing → Ended [ended event]               completed
     %%  Playing → Error                             error
     %%  Paused → PlayAttempt [play()]               playing  (resume; same session)
-    %%  Seeking → Playing|Rebuffering|Paused        seek_end  (+ stall if seekEnd lands in Rebuffering)
+    %%  Seeking → Playing [playing event]           playing  (seek resolved by JS debounce)
+    %%  Seeking → Rebuffering [seekEnd buffer empty] stall
+    %%  Seeking → Paused [seekEnd prev==Paused]     (no beacon; stays paused)
     %%  Rebuffering → Playing [playing event]       playing  (stall recovery)
     %%  Rebuffering → Paused [pause()]              playing  +  pause
-    %%  Rebuffering → Seeking [seekStart]           playing  +  seek_start
+    %%  Rebuffering → Seeking [seek]                playing  +  seek
     %%  Any active state [destroy()]                ended
     %%  Any active state [heartbeat tick]           heartbeat  (when silent for heartbeat_interval_ms)
     %%
@@ -66,27 +68,25 @@ stateDiagram-v2
 
     %% ── Active Playback ──────────────────────────────────────────────────────
     Playing --> Paused        : pause()
-    Playing --> Seeking       : seekStart
+    Playing --> Seeking       : seek
     Playing --> Rebuffering   : stall (buffer stall)
     Playing --> Ended         : ended event
     Playing --> Error         : error event
 
     %% ── Paused ───────────────────────────────────────────────────────────────
     Paused  --> PlayAttempt   : play()
-    Paused  --> Seeking       : seekStart
+    Paused  --> Seeking       : seek
     Paused  --> Idle          : destroy()
 
     %% ── Seeking ──────────────────────────────────────────────────────────────
-    %% Guard tracks the state that was active when seekStart fired.
-    Seeking --> Playing       : seekEnd [guard: prev == Playing AND buffer ready]
-    Seeking --> Rebuffering   : seekEnd [guard: prev == Playing AND buffer empty]
-    Seeking --> Paused        : seekEnd [guard: prev == Paused]
+    %% JS integrations resolve seeks by sending a playing event after a 300ms debounce.
+    Seeking --> Playing       : playing event (debounce resolved, video playing)
     Seeking --> Error         : error event
 
     %% ── Rebuffering ──────────────────────────────────────────────────────────
     Rebuffering --> Playing   : playing event
     Rebuffering --> Paused    : pause()
-    Rebuffering --> Seeking   : seekStart
+    Rebuffering --> Seeking   : seek
     Rebuffering --> Error     : error event
 
     %% ── Terminal / Reset ─────────────────────────────────────────────────────

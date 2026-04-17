@@ -8,4 +8,4 @@
 - [x] [dash.js Player Web Integration](docs/tdd/dashjs-integration.md)
 - [ ] [Viewership Metrics](docs/tdd/viewership-metrics.md)
 - [x] [Rebuffer and Seek Buffer Tracking](docs/tdd/rebuffer-tracking.md)
-- [ ] [Seek Tracking](docs/tdd/seek-tracking.md)
+- [x] [Seek Tracking](docs/tdd/seek-tracking.md)

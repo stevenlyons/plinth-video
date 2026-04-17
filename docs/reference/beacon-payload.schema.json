@@ -46,8 +46,7 @@
             "first_frame",
             "playing",
             "pause",
-            "seek_start",
-            "seek_end",
+            "seek",
             "stall",
             "quality_change",
             "error",
@@ -127,7 +126,7 @@
         },
         {
           "if": {
-            "properties": { "event": { "enum": ["seek_start", "seek_end"] } },
+            "properties": { "event": { "const": "seek" } },
             "required": ["event"]
           },
           "then": {
@@ -135,12 +134,7 @@
               "seek_from_ms": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Playhead position before the seek began, in milliseconds. Present on both seek_start and seek_end."
-              },
-              "seek_to_ms": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Target playhead position in milliseconds. Present on seek_end; may be absent on seek_start if the target is not yet known."
+                "description": "Playhead position immediately before the seek gesture began, in milliseconds."
               }
             }
           }
@@ -212,7 +206,7 @@
         "seek_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Total number of seek events initiated during the session (SeekStart events). Includes seeks that did not cause buffering."
+          "description": "Total number of seek events initiated during the session (seek events). Includes seeks that did not cause buffering."
         }
       },
       "required": ["vst_ms", "played_ms", "rebuffer_ms", "watched_ms", "rebuffer_count", "error_count", "seek_buffer_ms", "seek_buffer_count", "seek_count"]
