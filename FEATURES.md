@@ -9,4 +9,4 @@
 - [ ] [Viewership Metrics](docs/tdd/viewership-metrics.md)
 - [x] [Rebuffer and Seek Buffer Tracking](docs/tdd/rebuffer-tracking.md)
 - [x] [Seek Tracking](docs/tdd/seek-tracking.md)
-- [ ] [Heartbeat Inactivity Timeout](docs/tdd/heartbeat-inactivity-timeout.md)
+- [x] [Heartbeat Inactivity Timeout](docs/tdd/heartbeat-inactivity-timeout.md)
