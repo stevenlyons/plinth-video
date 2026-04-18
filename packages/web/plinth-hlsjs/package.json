@@ -1,6 +1,6 @@
 {
   "name": "@wirevice/plinth-hlsjs",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Plinth Video telemetry integration for HLS.js — automatically tracks playback events and reports metrics beacons",
   "type": "module",
   "main": "./dist/index.js",
