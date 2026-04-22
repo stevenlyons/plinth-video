@@ -450,18 +450,18 @@ describe("PlinthShaka", () => {
     assert.deepStrictEqual(seekStartCall?.arguments[0], { type: "seek", from_ms: 5_000 });
   });
 
-  // 26. stall suppressed while seeking is active
-  it("stall not emitted while seek debounce is pending", async () => {
+  // 26. stall forwarded during seeking so state machine can track seek_buffer_* metrics
+  it("stall emitted during seek so seek_buffer metrics can be tracked", async () => {
     instance = await setup(player, video, mockSession);
     video.fire("playing"); // hasFiredFirstFrame = true
     mockSession.processEvent.mock.resetCalls();
     video.fire("seeking");
-    player.fireBuffering(true); // should be suppressed
+    player.fireBuffering(true);
 
     const stallCalls = mockSession.processEvent.mock.calls.filter(
       (c) => (c.arguments[0] as any).type === "stall",
     );
-    assert.strictEqual(stallCalls.length, 0, "stall must not emit while seeking");
+    assert.strictEqual(stallCalls.length, 1, "stall forwarded during seeking for seek_buffer tracking");
   });
 
   // 27. stall fires normally after debounce has settled
