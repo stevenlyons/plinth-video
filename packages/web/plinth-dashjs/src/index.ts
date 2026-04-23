@@ -182,10 +182,10 @@ export class PlinthDashjs {
     this.videoHandlers.set("playing", onPlaying);
 
     const onWaiting: EventListener = () => {
-      if (this.hasFiredFirstFrame) {
-        this.emit({ type: "stall" });
-      } else {
+      if (!this.hasFiredFirstFrame) {
         this.emit({ type: "waiting" });
+      } else if (!this.isSeeking) {
+        this.emit({ type: "stall" });
       }
     };
     this.video.addEventListener("waiting", onWaiting);
