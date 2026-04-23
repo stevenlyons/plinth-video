@@ -1,6 +1,6 @@
 {
   "name": "@wirevice/plinth-shaka",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Plinth Video telemetry integration for Shaka Player — automatically tracks playback events and reports metrics beacons",
   "type": "module",
   "main": "./dist/index.js",
