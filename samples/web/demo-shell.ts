@@ -60,8 +60,99 @@ export function showVersions(versions: Record<string, string>): void {
     .join("  ·  ");
 }
 
+const HISTORY_KEY = "plinth_url_history";
+const HISTORY_MAX = 10;
+
+function loadHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history: string[]): void {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function addToHistory(url: string): void {
+  const history = loadHistory().filter((u) => u !== url);
+  history.unshift(url);
+  saveHistory(history.slice(0, HISTORY_MAX));
+}
+
+function deleteFromHistory(url: string): void {
+  saveHistory(loadHistory().filter((u) => u !== url));
+}
+
+function setupUrlHistory(): void {
+  const input = document.getElementById("url-input") as HTMLInputElement;
+  const dropdown = document.getElementById("url-dropdown")!;
+  let closeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function renderDropdown(filter: string): void {
+    const history = loadHistory().filter((u) =>
+      !filter || u.toLowerCase().includes(filter.toLowerCase())
+    );
+    if (history.length === 0) {
+      dropdown.classList.remove("open");
+      return;
+    }
+    dropdown.innerHTML = history
+      .map(
+        (url) =>
+          `<div class="url-hist-item" data-url="${encodeURIComponent(url)}">` +
+          `<span class="url-hist-label">${url}</span>` +
+          `<button class="url-hist-del" data-del="${encodeURIComponent(url)}" title="Remove">✕</button>` +
+          `</div>`,
+      )
+      .join("");
+    dropdown.classList.add("open");
+  }
+
+  function closeDropdown(): void {
+    dropdown.classList.remove("open");
+  }
+
+  input.addEventListener("focus", () => {
+    if (closeTimeout) clearTimeout(closeTimeout);
+    renderDropdown(input.value);
+  });
+
+  input.addEventListener("input", () => {
+    renderDropdown(input.value);
+  });
+
+  input.addEventListener("blur", () => {
+    closeTimeout = setTimeout(closeDropdown, 150);
+  });
+
+  dropdown.addEventListener("mousedown", (e) => {
+    // Prevent blur from firing before click
+    e.preventDefault();
+  });
+
+  dropdown.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const delBtn = target.closest<HTMLElement>(".url-hist-del");
+    if (delBtn) {
+      const url = decodeURIComponent(delBtn.dataset.del ?? "");
+      deleteFromHistory(url);
+      renderDropdown(input.value);
+      return;
+    }
+    const item = target.closest<HTMLElement>(".url-hist-item");
+    if (item) {
+      input.value = decodeURIComponent(item.dataset.url ?? "");
+      closeDropdown();
+    }
+  });
+}
+
 export function setupDemo(loader: Loader): void {
   let teardown: Teardown | null = null;
+
+  setupUrlHistory();
 
   document.getElementById("clear-log")!.addEventListener("click", () => {
     document.getElementById("log")!.innerHTML = "";
@@ -94,6 +185,7 @@ export function setupDemo(loader: Loader): void {
     const video = document.getElementById("video") as HTMLVideoElement;
     try {
       teardown = await loader(url, video, loggingSessionFactory);
+      addToHistory(url);
       log("Session started");
       const autostart = (document.getElementById("autostart") as HTMLInputElement).checked;
       if (autostart) video.play();

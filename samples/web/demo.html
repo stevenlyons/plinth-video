@@ -9,7 +9,15 @@
     body { font-family: system-ui, sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; height: 100vh; }
     header { padding: 12px 16px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 12px; }
     header h1 { font-size: 1rem; font-weight: 600; color: #aaa; }
-    #url-input { flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #444; background: #222; color: #eee; font-size: 0.85rem; }
+    .url-wrap { flex: 1; position: relative; }
+    #url-input { width: 100%; padding: 6px 10px; border-radius: 4px; border: 1px solid #444; background: #222; color: #eee; font-size: 0.85rem; }
+    #url-dropdown { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #1e1e1e; border: 1px solid #444; border-radius: 4px; z-index: 100; max-height: 240px; overflow-y: auto; }
+    #url-dropdown.open { display: block; }
+    .url-hist-item { display: flex; align-items: center; gap: 6px; padding: 5px 10px; cursor: pointer; font-size: 0.8rem; color: #ccc; }
+    .url-hist-item:hover { background: #2a2a2a; }
+    .url-hist-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .url-hist-del { flex-shrink: 0; background: none; border: none; color: #555; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 2px; }
+    .url-hist-del:hover { color: #e57373; }
     #home-btn { padding: 6px 10px; border-radius: 4px; border: 1px solid #333; background: #222; color: #aaa; font-size: 0.85rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
     #home-btn:hover { border-color: #555; color: #eee; }
     #load-btn { padding: 6px 16px; border-radius: 4px; border: none; background: #2563eb; color: #fff; font-size: 0.85rem; cursor: pointer; }
@@ -40,7 +48,10 @@
       Home
     </a>
     <h1 id="player-label">plinth-telemetry</h1>
-    <input id="url-input" type="text" spellcheck="false" />
+    <div class="url-wrap">
+      <input id="url-input" type="text" spellcheck="false" autocomplete="off" />
+      <div id="url-dropdown"></div>
+    </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;color:#888;white-space:nowrap;cursor:pointer;">
       <input id="autostart" type="checkbox" checked />
       Autostart
