@@ -1,5 +1,5 @@
 import Hls, { Events } from "hls.js";
-import { PlinthSession } from "@wirevice/plinth-js";
+import { PlinthSession, VideoSeekTracker } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 export const VERSION = "0.2.0";
@@ -21,9 +21,7 @@ export class PlinthHlsJs {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
-  private isSeeking = false;
-  private _pendingSeekFrom: number | null = null;
-  private _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private seekTracker!: VideoSeekTracker;
   private destroyed = false;
   private hlsHandlers = new Map<string, HlsHandler>();
   private videoHandlers = new Map<string, EventListener>();
@@ -55,6 +53,12 @@ export class PlinthHlsJs {
     };
     const session = await factory(meta, options?.config);
     const instance = new PlinthHlsJs(session, hls, video);
+    instance.seekTracker = new VideoSeekTracker(
+      video,
+      () => instance.lastPlayheadMs,
+      (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),
+      (paused) => { if (!paused) instance.emit({ type: "playing" }); },
+    );
     instance.attachHlsListeners();
     instance.attachVideoListeners();
     return instance;
@@ -71,8 +75,7 @@ export class PlinthHlsJs {
     if (this.destroyed) return;
     this.destroyed = true;
 
-    clearTimeout(this._seekDebounceTimer!);
-    this._seekDebounceTimer = null;
+    this.seekTracker.destroy();
 
     for (const [event, handler] of this.hlsHandlers) {
       this.hls.off(event as any, handler as any);
@@ -110,13 +113,14 @@ export class PlinthHlsJs {
 
     const onLevelSwitched: HlsHandler = (_event, data) => {
       const level = (this.hls as any).levels[data.level as number];
+      if (!level) return;
       this.emit({
         type: "quality_change",
         quality: {
-          bitrate_bps: level?.bitrate,
-          width: level?.width,
-          height: level?.height,
-          codec: level?.videoCodec,
+          bitrate_bps: level.bitrate,
+          width: level.width,
+          height: level.height,
+          codec: level.videoCodec,
         },
       });
     };
@@ -151,7 +155,7 @@ export class PlinthHlsJs {
       if (!this.hasFiredFirstFrame) {
         this.hasFiredFirstFrame = true;
         this.emit({ type: "first_frame" });
-      } else if (!this.isSeeking) {
+      } else if (!this.seekTracker.active) {
         this.emit({ type: "playing" });
       }
     };
@@ -161,7 +165,7 @@ export class PlinthHlsJs {
     const onWaiting: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.emit({ type: "waiting" });
-      } else if (!this.isSeeking) {
+      } else if (!this.seekTracker.active) {
         this.emit({ type: "stall" });
       }
     };
@@ -174,34 +178,6 @@ export class PlinthHlsJs {
     };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
-
-    const onSeeking: EventListener = () => {
-      if (this._pendingSeekFrom === null) {
-        this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
-        this.emit({ type: "seek", from_ms: this._pendingSeekFrom });
-      }
-      this.isSeeking = true;
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = null;
-    };
-    this.video.addEventListener("seeking", onSeeking);
-    this.videoHandlers.set("seeking", onSeeking);
-
-    const onSeeked: EventListener = () => {
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = setTimeout(() => {
-        this._seekDebounceTimer = null;
-        this.isSeeking = false;
-        if (this._pendingSeekFrom !== null) {
-          this._pendingSeekFrom = null;
-          if (!this.video.paused) {
-            this.emit({ type: "playing" });
-          }
-        }
-      }, 300);
-    };
-    this.video.addEventListener("seeked", onSeeked);
-    this.videoHandlers.set("seeked", onSeeked);
 
     const onEnded: EventListener = () => this.emit({ type: "ended" });
     this.video.addEventListener("ended", onEnded);
