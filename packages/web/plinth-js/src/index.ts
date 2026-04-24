@@ -134,3 +134,4 @@ export class PlinthSession {
 }
 
 export type { BeaconBatch, Beacon, PlinthConfig, PlayerEvent, SessionMeta } from "./types.js";
+export { VideoSeekTracker } from "./seek-tracker.js";
