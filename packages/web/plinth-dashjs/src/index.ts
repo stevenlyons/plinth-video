@@ -1,4 +1,4 @@
-import { PlinthSession } from "@wirevice/plinth-js";
+import { PlinthSession, VideoSeekTracker } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 export const VERSION = "0.2.0";
@@ -49,9 +49,7 @@ export class PlinthDashjs {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
-  private isSeeking = false;
-  private _pendingSeekFrom: number | null = null;
-  private _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private seekTracker!: VideoSeekTracker;
   private lastQualityBandwidth: number | null = null;
   private destroyed = false;
   private playerHandlers = new Map<string, (e?: unknown) => void>();
@@ -84,6 +82,12 @@ export class PlinthDashjs {
     };
     const session = await factory(meta, options?.config);
     const instance = new PlinthDashjs(session, player, video);
+    instance.seekTracker = new VideoSeekTracker(
+      video,
+      () => instance.lastPlayheadMs,
+      (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),
+      (paused) => { if (!paused) instance.emit({ type: "playing" }); },
+    );
     instance.attachPlayerListeners();
     instance.attachVideoListeners();
     return instance;
@@ -93,8 +97,7 @@ export class PlinthDashjs {
     if (this.destroyed) return;
     this.destroyed = true;
 
-    clearTimeout(this._seekDebounceTimer!);
-    this._seekDebounceTimer = null;
+    this.seekTracker.destroy();
 
     for (const [event, handler] of this.playerHandlers) {
       this.player.off(event, handler);
@@ -116,7 +119,7 @@ export class PlinthDashjs {
   private attachPlayerListeners(): void {
     const onManifestLoadingStarted = () => {
       this.hasFiredFirstFrame = false;
-      this.isSeeking = false;
+      this.seekTracker.reset();
       this.lastQualityBandwidth = null;
       this.emit({ type: "load", src: this.player.getSource() ?? "" });
     };
@@ -174,7 +177,7 @@ export class PlinthDashjs {
       if (!this.hasFiredFirstFrame) {
         this.hasFiredFirstFrame = true;
         this.emit({ type: "first_frame" });
-      } else if (!this.isSeeking) {
+      } else if (!this.seekTracker.active) {
         this.emit({ type: "playing" });  // suppressed during seek; replayed from debounce callback
       }
     };
@@ -184,7 +187,7 @@ export class PlinthDashjs {
     const onWaiting: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.emit({ type: "waiting" });
-      } else if (!this.isSeeking) {
+      } else if (!this.seekTracker.active) {
         this.emit({ type: "stall" });
       }
     };
@@ -197,34 +200,6 @@ export class PlinthDashjs {
     };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
-
-    const onSeeking: EventListener = () => {
-      if (this._pendingSeekFrom === null) {
-        this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
-        this.emit({ type: "seek", from_ms: this._pendingSeekFrom });
-      }
-      this.isSeeking = true;
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = null;
-    };
-    this.video.addEventListener("seeking", onSeeking);
-    this.videoHandlers.set("seeking", onSeeking);
-
-    const onSeeked: EventListener = () => {
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = setTimeout(() => {
-        this._seekDebounceTimer = null;
-        this.isSeeking = false;
-        if (this._pendingSeekFrom !== null) {
-          this._pendingSeekFrom = null;
-          if (!this.video.paused) {
-            this.emit({ type: "playing" });
-          }
-        }
-      }, 300);
-    };
-    this.video.addEventListener("seeked", onSeeked);
-    this.videoHandlers.set("seeked", onSeeked);
 
     const onEnded: EventListener = () => this.emit({ type: "ended" });
     this.video.addEventListener("ended", onEnded);

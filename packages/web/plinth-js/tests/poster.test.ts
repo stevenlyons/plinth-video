@@ -59,12 +59,10 @@ describe("postBeacons", () => {
     assert.strictEqual(init.body, BATCH_JSON);
   });
 
-  it("rejects when fetch throws a network error", async () => {
+  it("resolves (does not throw) when fetch throws a network error", async () => {
     globalThis.fetch = mock.fn(() => Promise.reject(new TypeError("network error"))) as unknown as typeof fetch;
 
-    await assert.rejects(
-      postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON),
-      { message: "network error" },
-    );
+    // Network errors are caught and logged via console.warn — postBeacons should not propagate them.
+    await assert.doesNotReject(postBeacons(ENDPOINT, PROJECT_KEY, BATCH_JSON));
   });
 });

@@ -1,4 +1,4 @@
-import { PlinthSession } from "@wirevice/plinth-js";
+import { PlinthSession, VideoSeekTracker } from "@wirevice/plinth-js";
 import type { PlinthConfig, PlayerEvent, SessionMeta } from "@wirevice/plinth-js";
 
 export const VERSION = "0.2.0";
@@ -19,9 +19,7 @@ export class PlinthShaka {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
-  private isSeeking = false;
-  private _pendingSeekFrom: number | null = null;
-  private _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private seekTracker!: VideoSeekTracker;
   private destroyed = false;
   private shakaHandlers = new Map<string, EventListener>();
   private videoHandlers = new Map<string, EventListener>();
@@ -53,6 +51,12 @@ export class PlinthShaka {
     };
     const session = await factory(meta, options?.config);
     const instance = new PlinthShaka(session, player, video);
+    instance.seekTracker = new VideoSeekTracker(
+      video,
+      () => instance.lastPlayheadMs,
+      (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),
+      (paused) => { if (!paused) instance.emit({ type: "playing" }); },
+    );
     instance.attachShakaListeners();
     instance.attachVideoListeners();
     return instance;
@@ -68,8 +72,7 @@ export class PlinthShaka {
     if (this.destroyed) return;
     this.destroyed = true;
 
-    clearTimeout(this._seekDebounceTimer!);
-    this._seekDebounceTimer = null;
+    this.seekTracker.destroy();
 
     for (const [event, handler] of this.shakaHandlers) {
       this.player.removeEventListener(event, handler);
@@ -108,7 +111,7 @@ export class PlinthShaka {
     const onBuffering: EventListener = (e) => {
       if ((e as any).buffering) {
         this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
-      } else if (!this.isSeeking) {
+      } else if (!this.seekTracker.active) {
         this.emit({ type: "playing" });
       }
     };
@@ -174,34 +177,6 @@ export class PlinthShaka {
     };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
-
-    const onSeeking: EventListener = () => {
-      if (this._pendingSeekFrom === null) {
-        this._pendingSeekFrom = Math.round(this.lastPlayheadMs);
-        this.emit({ type: "seek", from_ms: this._pendingSeekFrom });
-      }
-      this.isSeeking = true;
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = null;
-    };
-    this.video.addEventListener("seeking", onSeeking);
-    this.videoHandlers.set("seeking", onSeeking);
-
-    const onSeeked: EventListener = () => {
-      clearTimeout(this._seekDebounceTimer!);
-      this._seekDebounceTimer = setTimeout(() => {
-        this._seekDebounceTimer = null;
-        this.isSeeking = false;
-        if (this._pendingSeekFrom !== null) {
-          this._pendingSeekFrom = null;
-          if (!this.video.paused) {
-            this.emit({ type: "playing" });
-          }
-        }
-      }, 300);
-    };
-    this.video.addEventListener("seeked", onSeeked);
-    this.videoHandlers.set("seeked", onSeeked);
 
     const onEnded: EventListener = () => this.emit({ type: "ended" });
     this.video.addEventListener("ended", onEnded);

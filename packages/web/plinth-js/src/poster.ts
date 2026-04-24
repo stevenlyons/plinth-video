@@ -15,5 +15,7 @@ export async function postBeacons(
     },
     body: batchJson,
     keepalive: true,
+  }).catch((err: unknown) => {
+    console.warn("[plinth] beacon POST failed:", err);
   });
 }

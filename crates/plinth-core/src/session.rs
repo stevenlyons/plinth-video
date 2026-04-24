@@ -653,8 +653,9 @@ impl Session {
             return vec![];
         }
 
-        // Suppress heartbeat after more than 60 seconds of continuous inactivity
-        // (Paused/Ended/Error). One final heartbeat fires at exactly the 60s mark.
+        // Suppress heartbeat after 60 seconds of continuous inactivity (Paused/Ended/Error).
+        // The last heartbeat fires on whichever tick lands at or just before the 60s threshold;
+        // all subsequent ticks are suppressed.
         const INACTIVITY_TIMEOUT_MS: u64 = 60_000;
         if let Some(inactive_since) = self.inactive_since_ms {
             if now_ms.saturating_sub(inactive_since) > INACTIVITY_TIMEOUT_MS {
