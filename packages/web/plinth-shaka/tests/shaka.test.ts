@@ -484,7 +484,24 @@ describe("PlinthShaka", () => {
     assertCalledWith(mockSession.processEvent, { type: "stall" });
   });
 
-  // 28. 'ended' during seek — seek_end settled before ended so state machine exits Seeking
+  // 28. buffer_ready=true when video is playing at debounce time (race condition guard)
+  it("seek_end buffer_ready=true when video is not paused at debounce time", async () => {
+    instance = await setup(player, video, mockSession);
+    video.paused = false;
+    video.buffered = { length: 0, start: () => 0, end: () => 0 } as unknown as TimeRanges; // no ranges
+    video.fire("seeking");
+    video.fire("seeked");
+    mock.timers.tick(300);
+
+    const seekEndCall = mockSession.processEvent.mock.calls.find(
+      (c) => (c.arguments[0] as any).type === "seek_end",
+    );
+    assert.ok(seekEndCall, "seek_end must be emitted");
+    assert.strictEqual((seekEndCall!.arguments[0] as any).buffer_ready, true,
+      "buffer_ready must be true when video is playing at debounce time");
+  });
+
+  // 30. 'ended' during seek — seek_end settled before ended so state machine exits Seeking
   it("'ended' during seek debounce → seek_end emitted then ended", async () => {
     instance = await setup(player, video, mockSession);
     video.fire("playing"); // hasFiredFirstFrame = true
@@ -502,7 +519,7 @@ describe("PlinthShaka", () => {
     assert.ok(seekEndIdx < endedIdx, "seek_end must precede ended");
   });
 
-  // 29. destroy() cancels pending debounce — playing not emitted after destroy
+  // 31. destroy() cancels pending debounce — playing not emitted after destroy
   it("destroy() cancels pending seek debounce", async () => {
     instance = await setup(player, video, mockSession);
     video.paused = false;

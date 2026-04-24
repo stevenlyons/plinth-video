@@ -1,5 +1,10 @@
-/** Returns true if `video.currentTime` falls within any buffered range. */
+/**
+ * Returns true if the seek destination is buffered and ready to play.
+ * A non-paused video is playing by definition, so the buffer is ready
+ * regardless of what the TimeRanges report at that instant.
+ */
 function isBufferReady(video: HTMLVideoElement): boolean {
+  if (!video.paused) return true;
   const ct = video.currentTime;
   for (let i = 0; i < video.buffered.length; i++) {
     if (video.buffered.start(i) <= ct && ct <= video.buffered.end(i)) {
