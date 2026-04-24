@@ -57,7 +57,7 @@ export class PlinthHlsJs {
       video,
       () => instance.lastPlayheadMs,
       (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),
-      (paused) => { if (!paused) instance.emit({ type: "playing" }); },
+      (toMs, bufferReady) => instance.emit({ type: "seek_end", to_ms: toMs, buffer_ready: bufferReady }),
     );
     instance.attachHlsListeners();
     instance.attachVideoListeners();
@@ -165,7 +165,8 @@ export class PlinthHlsJs {
     const onWaiting: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.emit({ type: "waiting" });
-      } else if (!this.seekTracker.active) {
+      } else {
+        // Forward stall even during a seek so the state machine can track seek_buffer_ms.
         this.emit({ type: "stall" });
       }
     };
@@ -179,7 +180,10 @@ export class PlinthHlsJs {
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
-    const onEnded: EventListener = () => this.emit({ type: "ended" });
+    const onEnded: EventListener = () => {
+      this.seekTracker.settle(true); // resolve any in-flight seek before ending the session
+      this.emit({ type: "ended" });
+    };
     this.video.addEventListener("ended", onEnded);
     this.videoHandlers.set("ended", onEnded);
 
