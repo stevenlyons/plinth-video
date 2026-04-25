@@ -90,8 +90,8 @@ See `packages/web/plinth-shaka/tests/shaka.test.ts` for examples using `FakePlay
 | Shaka `loading`                       | `load` (src from `player.getAssetUri()`); resets `hasFiredFirstFrame` |
 | Shaka `loaded`                        | `can_play`                                                      |
 | Shaka `buffering` (true, before first frame) | `waiting` — initial buffer stall (PlayAttempt → Buffering) |
-| Shaka `buffering` (true, after first frame)  | `stall` — mid-playback stall (Playing → Rebuffering)       |
-| Shaka `buffering` (false)             | `playing` — buffer recovered; rebuffer recovery / resume        |
+| Shaka `buffering` (true, after first frame)  | `stall` — forwarded even during seek so `seek_buffer_ms` is tracked |
+| Shaka `buffering` (false)             | `playing` — buffer recovered; suppressed while seek debounce is active |
 | Shaka `adaptation`                    | `quality_change`                                                |
 | Shaka `error` (severity CRITICAL)     | `error` (fatal)                                                 |
 | Shaka `error` (severity RECOVERABLE)  | `error` (non-fatal)                                             |
@@ -99,13 +99,13 @@ See `packages/web/plinth-shaka/tests/shaka.test.ts` for examples using `FakePlay
 | `<video> play`                        | `play`                                                          |
 | `<video> playing` (first time)        | `first_frame` — sets `hasFiredFirstFrame`                       |
 | `<video> playing` (subsequent)        | no-op (recovery handled by Shaka `buffering(false)`)            |
-| `<video> pause`                       | `pause` — suppressed when `video.ended` is true                 |
-| `<video> seeking` (first in gesture)  | `seek` — debounced; fires once per gesture with `from_ms`       |
-| `<video> seeked` (after 300ms)        | `playing` — emitted when debounce settles and video is playing  |
+| `<video> pause`                       | `pause` — suppressed when `video.ended` or `video.seeking` is true |
+| `<video> seeking` (first in gesture)  | `seek` — debounced; fires once per gesture with `from_ms`          |
+| `<video> seeked` (after 300ms)        | `seek_end` then `playing` — debounce fires `seek_end`; if video is not paused, `playing` is replayed immediately after |
 | `<video> ended`                       | `ended`                                                         |
 | `<video> timeupdate`                  | updates playhead (heartbeat data)                               |
 | `<video> error`                       | `error` (fatal, codec / decode errors)                          |
 
 ### Key difference from Hls.js
 
-Shaka uses a single `buffering` event with a boolean flag for both stall and recovery, whereas Hls.js relies on the `<video>` element's `waiting` and `playing` events. The `hasFiredFirstFrame` flag (reset on each `loading` event) distinguishes initial buffering (`waiting`) from mid-playback stalls (`stall`). Buffer recovery always uses Shaka's `buffering(false)` → `playing`; the `<video> playing` event only fires `first_frame` on the very first play per load.
+Shaka uses a single `buffering` event with a boolean flag for both stall and recovery, whereas Hls.js relies on the `<video>` element's `waiting` and `playing` events. The `hasFiredFirstFrame` flag (reset on each `loading` event) distinguishes initial buffering (`waiting`) from mid-playback stalls (`stall`). Buffer recovery uses Shaka's `buffering(false)` → `playing`, but this is suppressed while the seek debounce is active — seek resolution is driven by the `seeked` debounce callback instead. The `<video> playing` event only fires `first_frame` on the very first play per load.

@@ -8,28 +8,31 @@ The current seek implementation emits one `seek_start`/`seek_end` pair per `seek
 
 ## Architecture
 
-Changes are confined to **Layer 3** (player integrations). plinth-core and plinth-js are unchanged. All three integrations share the same debounce pattern and are changed identically.
+Changes span **Layer 2** (seek tracker shared utility) and **Layer 3** (player integrations). plinth-core is unchanged. All three integrations share the same debounce pattern via `VideoSeekTracker`.
 
 | Component | Change |
 |---|---|
-| `packages/web/plinth-hlsjs/src/index.ts` | Debounce seek logic; suppress `stall` during seeking |
-| `packages/web/plinth-shaka/src/index.ts` | Debounce seek logic; suppress `stall` during seeking |
-| `packages/web/plinth-dashjs/src/index.ts` | Debounce seek logic; suppress `stall` during seeking |
+| `packages/web/plinth-js/src/seek-tracker.ts` | `VideoSeekTracker` class — shared debounce logic for all web adapters |
+| `packages/web/plinth-hlsjs/src/index.ts` | Debounce seek via `VideoSeekTracker`; suppress spurious `pause` during seeking; forward `stall` during seek for `seek_buffer_ms` tracking |
+| `packages/web/plinth-shaka/src/index.ts` | Same as above |
+| `packages/web/plinth-dashjs/src/index.ts` | Same as above |
 
-No changes to `plinth-core`, `plinth-js`, reference docs, or schema.
+No changes to plinth-core, beacon schema, or reference docs beyond this TDD.
 
 ---
 
 ## Data Models
 
-No new types. Two new local variables per integration inside `attachVideoListeners`:
+Seek state is encapsulated in `VideoSeekTracker` (Layer 2, `plinth-js`):
 
 ```ts
-let _pendingSeekFrom: number | null = null;   // origin; set only on first seeking of a scrub
-let _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+// Internal to VideoSeekTracker
+private _active = false;                   // true between first seeking and debounce settlement
+private _pendingSeekFrom: number | null;   // origin; set only on first seeking of a scrub
+private _debounceTimer: ReturnType<typeof setTimeout> | null;
 ```
 
-`isSeeking` (existing class field) continues to guard stall suppression and is now set/cleared inside the debounce callback rather than on `seeked`.
+Adapters hold a `seekTracker: VideoSeekTracker` field. The `active` getter replaces the old `isSeeking` class field.
 
 ---
 
@@ -37,45 +40,63 @@ let _seekDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 ### Click seek (single seeking → seeked pair)
 
-1. `seeking` fires. `_pendingSeekFrom === null` → record `_pendingSeekFrom = lastPlayheadMs`. `isSeeking = true`. Cancel any pending debounce timer (none).
-2. `seeked` fires. Cancel any pending timer (none). Start debounce timer (300ms).
-3. 300ms later — no further `seeking` events. Timer callback fires:
-   - `isSeeking = false`
-   - Compute `seekDistance = |currentTime - _pendingSeekFrom|`
-   - If `seekDistance > 250`: emit `seek_start(from_ms)` then `seek_end(to_ms, buffer_ready)`
+1. `seeking` fires. `_pendingSeekFrom === null` → record origin from `lastPlayheadMs`. Emit `seek(from_ms)`. `_active = true`. Cancel any pending debounce timer (none).
+2. `seeked` fires. Cancel any pending timer. Start 300ms debounce timer.
+3. 300ms of silence. Debounce callback fires:
+   - `_active = false`
+   - Emit `seek_end(to_ms, buffer_ready)`
+   - If `!video.paused`, emit `playing` — browser suppresses the native `playing` event during the debounce window and never re-fires it, so the adapter replays it explicitly
    - Reset `_pendingSeekFrom = null`
 
 ### Continuous scrubbing (many seeking → seeked pairs)
 
-1. First `seeking` fires. `_pendingSeekFrom === null` → record origin. `isSeeking = true`.
+1. First `seeking` fires. `_pendingSeekFrom === null` → record origin. Emit `seek(from_ms)`. `_active = true`.
 2. First `seeked` fires. Start debounce timer.
 3. Second `seeking` fires within 300ms. `_pendingSeekFrom !== null` → do NOT update origin. Cancel debounce timer.
 4. Second `seeked` fires. Start new debounce timer.
 5. Steps 3–4 repeat for each drag position.
 6. User releases. Last `seeked` fires. Start debounce timer.
-7. 300ms of silence. Timer callback fires with original origin and final `currentTime`. Emit one seek event if distance > 250ms.
+7. 300ms of silence. Timer callback fires with original origin and final `currentTime`. Emit `seek_end` (and `playing` if not paused).
 
-### Stall suppression during seeking
+### Stall forwarding during seeking
 
-- `onWaiting` / `onBuffering` (stall path): if `isSeeking === true`, do nothing. `isSeeking` remains true from the first `seeking` event until the debounce callback fires, covering the entire scrub.
-- After debounce fires (`isSeeking = false`): if the video is still stalled (waiting for buffered content), the `seek_end` event carries `buffer_ready: false`. plinth-core's `Seeking → Rebuffering` transition handles this correctly — no need for a separate `stall` event.
+Stall events (`waiting` / `buffering: true`) are **forwarded to the state machine even while seeking is active**. This allows plinth-core to accumulate `seek_buffer_ms` for seeks that include a rebuffer. The `seek_end` event carries `buffer_ready: false` when the buffer is empty at debounce time, causing `Seeking → Rebuffering` in the state machine.
+
+### Spurious pause suppression
+
+Browsers and some players (HLS.js, dash.js) fire a `pause` event during seeking. If forwarded, this corrupts `pre_seek_state` and causes `seek_end` to resolve to Paused even when the user never paused. The `onPause` handler guards against this:
+
+```ts
+const onPause: EventListener = () => {
+  if (this.video.ended) return;
+  if (this.video.seeking) return; // spurious pause fired by browser/player during seek
+  this.emit({ type: "pause" });
+};
+```
 
 ### destroy() cleanup
 
-`destroy()` must clear the debounce timer to prevent callbacks firing after teardown:
-
-```ts
-if (_seekDebounceTimer !== null) {
-  clearTimeout(_seekDebounceTimer);
-  _seekDebounceTimer = null;
-}
-```
+`VideoSeekTracker.destroy()` removes event listeners and clears the debounce timer. Adapters call `this.seekTracker.destroy()` in their own `destroy()` method. No manual timer management needed in adapters.
 
 ---
 
 ## API Design
 
-No public API changes. This is internal event handling logic only.
+`VideoSeekTracker` is exported from `@wirevice/plinth-js` for use by all web adapters. Adapters construct it in `initialize()` with four callbacks:
+
+```ts
+new VideoSeekTracker(
+  video,
+  () => instance.lastPlayheadMs,           // getPlayheadMs
+  (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),  // onSeekStart
+  (toMs, bufferReady) => {                  // onSeekEnd (fires after 300ms debounce)
+    instance.emit({ type: "seek_end", to_ms: toMs, buffer_ready: bufferReady });
+    if (!video.paused) instance.emit({ type: "playing" });
+  },
+)
+```
+
+The `active` getter is `true` between the first `seeking` event and debounce settlement. Adapters check `seekTracker.active` only where needed (e.g. to suppress Shaka's `buffering(false)` → `playing` during a seek).
 
 ### Debounce window
 
@@ -85,15 +106,13 @@ No public API changes. This is internal event handling logic only.
 
 ## Shaka-specific note
 
-Shaka's stall signal comes from the player `buffering` event (not the video `waiting` event). The `onBuffering` handler already guards recovery (`!isSeeking` on the `playing` emit path). The stall path (`buffering: true`) needs the same guard added:
+Shaka's stall signal comes from the player `buffering` event (not the video `waiting` event). The stall path (`buffering: true`) forwards stalls unconditionally (no seeking guard) so `seek_buffer_ms` is tracked. The recovery path (`buffering: false`) is suppressed while `seekTracker.active` is true — seek recovery is driven by the `seeked` debounce callback instead:
 
 ```ts
 const onBuffering: EventListener = (e) => {
   if ((e as any).buffering) {
-    if (!this.isSeeking) {
-      this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
-    }
-  } else if (!this.isSeeking) {
+    this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
+  } else if (!this.seekTracker.active) {
     this.emit({ type: "playing" });
   }
 };
@@ -114,26 +133,21 @@ afterEach(() => { mock.timers.reset(); });
 
 Advance time with `mock.timers.tick(300)`.
 
-### New tests per integration (same for hlsjs, shaka, dashjs)
+### Key tests per integration (same for hlsjs, shaka, dashjs)
 
 | Test | What it verifies |
 |---|---|
-| `single seek emits after debounce window` | Fire `seeking` + `seeked`; tick 299ms → no emit; tick 1ms → seek emitted |
-| `seek origin is captured from first seeking event` | Fire `seeking` at 5s, then `seeking` again (during scrub) at 10s; settle at 20s; verify `seek_start.from_ms === 5000` |
-| `scrubbing emits one seek for many seeking/seeked pairs` | Fire 5 seeking/seeked pairs; tick 300ms; verify exactly one `seek_start` and one `seek_end` |
-| `stall suppressed while seeking active` | Fire `seeking`; fire `waiting`/`buffering`; tick 299ms; verify `stall` NOT emitted |
-| `stall emitted after debounce settles` | Fire `seeking`; tick 300ms (settle); fire `waiting`; verify `stall` emitted |
-| `destroy cancels pending debounce` | Fire `seeking` + `seeked`; call `destroy()`; tick 300ms; verify no seek emitted |
-| `seek below 250ms distance not emitted after debounce` | Fire `seeking` + `seeked` with distance 100ms; tick 300ms; verify no seek emitted |
-
-### Existing seek tests to update
-
-The existing seek tests (test 10 in each integration) fire `seeking` + `seeked` directly and assert immediately. These must be updated to tick the debounce timer before asserting.
-
-Tests 11, 12 (buffer_ready checks) fire `seeked` without `seeking`. These need:
-- A prior `seeking` event to set `_pendingSeekFrom`
-- A `mock.timers.tick(300)` before asserting
-- OR restructuring to assert that `seek_end` is emitted as part of the debounce callback
+| `seek completes → seek_end emitted with buffer_ready` | Fire `seeking` + `seeked`; tick 300ms; assert `seek_end` and `playing` emitted |
+| `seek completes while video paused → seek_end emitted, playing not emitted` | Same but `video.paused = true`; assert `playing` NOT emitted |
+| `seek_end emitted after 300ms debounce fires` | Full flow with `timeupdate`; assert `seek`, `seek_end`, and `playing` all emitted |
+| `seek_end buffer_ready=true when video is not paused at debounce time` | Buffer ranges empty but `video.paused = false`; assert `buffer_ready: true` and `playing` emitted |
+| `scrubbing emits exactly one seek_start` | Fire multiple `seeking`/`seeked` pairs; tick 300ms; assert exactly one `seek` emitted |
+| `scrubbing: seek_start.from_ms is position before first seeking event` | Scrub from 5s through multiple positions; assert `from_ms === 5000` |
+| `stall forwarded during seek for seek_buffer tracking` | Fire `seeking` then `waiting`; assert `stall` IS emitted (not suppressed) |
+| `stall emits normally after seek debounce has settled` | Settle debounce first; fire `waiting`; assert `stall` emitted |
+| `video 'pause' during seeking → pause suppressed` | Fire `seeking` then `pause`; assert no `pause` event forwarded |
+| `destroy cancels pending seek debounce` | Fire `seeking` + `seeked`; call `destroy()`; tick 300ms; verify no seek emitted |
+| `'ended' during seek debounce → seek_end emitted then ended` | Fire `seeked`, then `ended` before debounce; assert `seek_end` fires before `ended` |
 
 ---
 

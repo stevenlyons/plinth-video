@@ -53,8 +53,8 @@ load  →  can_play  →  play  →  [waiting]  →  first_frame  →  [stall / 
 | `first_frame` | First decoded frame rendered — emitted **once per load**. Use a `hasFiredFirstFrame` flag and reset it on each new `load`. |
 | `stall` | Buffer exhausted **after** first frame (Playing → Rebuffering). Use the same `hasFiredFirstFrame` flag to distinguish from `waiting`. |
 | `playing` | Rebuffer recovery or resume from pause (Rebuffering/Paused → Playing). Do not re-emit `first_frame` here. |
-| `pause` | Playback paused by user or programmatically. **Suppress if the video has ended naturally** (check `video.ended` or equivalent). |
-| `seek` | Seek begins. Pass `from_ms` (last known playhead position). Debounce multiple seeking events; emit only once per gesture. |
+| `pause` | Playback paused by user or programmatically. **Suppress if the video has ended naturally** (check `video.ended`). **Also suppress if the video is currently seeking** (check `video.seeking`) — browsers and some players fire a spurious `pause` event during seeks that would corrupt the pre-seek state. |
+| `seek` | Seek begins. Pass `from_ms` (last known playhead position). Debounce multiple seeking events; emit only once per gesture. After the debounce fires, emit `seek_end` with `to_ms` and `buffer_ready`. If the video is not paused at debounce time, also emit `playing` immediately after — the browser suppresses the native `playing` event during the debounce window and never re-fires it. |
 | `quality_change` | ABR rendition switch. |
 | `error` | Player or network error. |
 | `ended` | Content reached natural end. |
@@ -89,7 +89,7 @@ Use a fake/stub player that lets you fire events programmatically. Inject a mock
 - The correct `PlayerEvent` is sent for each player event
 - The full `load → can_play → play → first_frame` path emits `play` + `first_frame` + `playing`
 - `destroy` is idempotent and cleans up all listeners
-- Seek emits exactly one `seek` per gesture followed by `playing` on resume
+- Seek emits exactly one `seek` per gesture, followed by `seek_end` then `playing` when the video resumes; `playing` is omitted when the video is paused after seeking
 
 See `packages/plinth-hlsjs/src/index.test.ts` (web) and `Tests/PlinthAVPlayerTests/` (Swift) for reference test patterns.
 
