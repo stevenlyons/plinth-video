@@ -88,10 +88,10 @@ See `packages/web/plinth-dashjs/tests/dashjs.test.ts` for examples using a fake 
 | `<video> playing` (first time)               | `first_frame` — sets `hasFiredFirstFrame`                                |
 | `<video> playing` (subsequent)               | `playing` — buffer recovered; drives Buffering/Rebuffering → Playing     |
 | `<video> waiting` (before first frame)       | `waiting` — initial buffer stall (PlayAttempt → Buffering)               |
-| `<video> waiting` (after first frame)        | `stall` — mid-playback stall (Playing → Rebuffering); suppressed during seek |
-| `<video> pause`                              | `pause` — suppressed when `video.ended` is true                          |
+| `<video> waiting` (after first frame)        | `stall` — forwarded even during seek so `seek_buffer_ms` is tracked      |
+| `<video> pause`                              | `pause` — suppressed when `video.ended` or `video.seeking` is true       |
 | `<video> seeking` (first in gesture)         | `seek` — debounced; fires once per gesture with `from_ms`                |
-| `<video> seeked` (after 300ms)               | `playing` — emitted when debounce settles and video is playing           |
+| `<video> seeked` (after 300ms)               | `seek_end` then `playing` — debounce fires `seek_end`; if video is not paused, `playing` is replayed immediately after |
 | `<video> ended`                              | `ended`                                                                  |
 | `<video> timeupdate`                         | updates playhead (heartbeat data)                                        |
 | `<video> error`                              | `error` (fatal, codec / decode errors)                                   |
@@ -100,6 +100,6 @@ See `packages/web/plinth-dashjs/tests/dashjs.test.ts` for examples using a fake 
 
 - **No auto-destroy**: dash.js has no equivalent of `DESTROYING` (Hls.js) or `unloading` (Shaka). Always call `plinth.destroy()` explicitly before releasing the player.
 - **`first_frame` and `playing` via `<video> playing`**: Both initial playback and buffer-recovery signals come from the native video element `playing` event, guarded by `hasFiredFirstFrame` — the same pattern used by the HLS.js integration.
-- **`stall` and `waiting` via `<video> waiting`**: The native video element `waiting` event fires whenever the browser cannot continue playback. `hasFiredFirstFrame` differentiates the initial buffering case (`waiting`) from a mid-playback rebuffer (`stall`). Seek-time waiting is suppressed by the `isSeeking` guard.
+- **`stall` and `waiting` via `<video> waiting`**: The native video element `waiting` event fires whenever the browser cannot continue playback. `hasFiredFirstFrame` differentiates the initial buffering case (`waiting`) from a mid-playback rebuffer (`stall`). Stalls are forwarded even during a seek so the core can track `seek_buffer_ms`.
 - **All errors are fatal**: dash.js surfaces errors without a severity field; all `ERROR` events emit `fatal: true`.
 - **Quality dedup**: `QUALITY_CHANGE_RENDERED` fires on every segment switch. The integration deduplicates by comparing `bandwidth` against the previous emission so identical-bitrate switches don't produce spurious events.

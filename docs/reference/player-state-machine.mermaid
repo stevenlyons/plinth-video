@@ -37,9 +37,9 @@ stateDiagram-v2
     %%  Playing → Ended [ended event]               completed
     %%  Playing → Error                             error
     %%  Paused → PlayAttempt [play()]               playing  (resume; same session)
-    %%  Seeking → Playing [playing event]           playing  (seek resolved by JS debounce)
-    %%  Seeking → Rebuffering [seekEnd buffer empty] stall
-    %%  Seeking → Paused [seekEnd prev==Paused]     (no beacon; stays paused)
+    %%  Seeking → Playing [seek_end, buffer_ready]   playing  (seek_end resolves seek; playing replayed by adapter)
+    %%  Seeking → Rebuffering [seek_end, buf empty]  stall
+    %%  Seeking → Paused [seek_end, pre==Paused]     (no beacon; stays paused)
     %%  Rebuffering → Playing [playing event]       playing  (stall recovery)
     %%  Rebuffering → Paused [pause()]              playing  +  pause
     %%  Rebuffering → Seeking [seek]                playing  +  seek
@@ -79,8 +79,11 @@ stateDiagram-v2
     Paused  --> Idle          : destroy()
 
     %% ── Seeking ──────────────────────────────────────────────────────────────
-    %% JS integrations resolve seeks by sending a playing event after a 300ms debounce.
-    Seeking --> Playing       : playing event (debounce resolved, video playing)
+    %% JS adapters resolve seeks by emitting seek_end after a 300ms debounce, then
+    %% replaying playing if the video is not paused. pre_seek_state determines target.
+    Seeking --> Playing       : seek_end (buffer_ready, pre_seek_state ≠ Paused)
+    Seeking --> Rebuffering   : seek_end (buffer empty, pre_seek_state ≠ Paused)
+    Seeking --> Paused        : seek_end (pre_seek_state = Paused)
     Seeking --> Error         : error event
 
     %% ── Rebuffering ──────────────────────────────────────────────────────────
