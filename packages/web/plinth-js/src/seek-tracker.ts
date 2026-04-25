@@ -1,4 +1,20 @@
 /**
+ * Returns true if the seek destination is buffered and ready to play.
+ * A non-paused video is playing by definition, so the buffer is ready
+ * regardless of what the TimeRanges report at that instant.
+ */
+function isBufferReady(video: HTMLVideoElement): boolean {
+  if (!video.paused) return true;
+  const ct = video.currentTime;
+  for (let i = 0; i < video.buffered.length; i++) {
+    if (video.buffered.start(i) <= ct && ct <= video.buffered.end(i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Manages seek debounce state for HTML video element adapters.
  *
  * Attaches `seeking` and `seeked` listeners to the video element, debounces
@@ -10,6 +26,7 @@ export class VideoSeekTracker {
   private _pendingSeekFrom: number | null = null;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly _video: HTMLVideoElement;
+  private readonly _onSeekEnd: (toMs: number, bufferReady: boolean) => void;
   private readonly _seekingHandler: EventListener;
   private readonly _seekedHandler: EventListener;
 
@@ -17,14 +34,16 @@ export class VideoSeekTracker {
    * @param video         The video element to observe.
    * @param getPlayheadMs Returns the current playhead position in ms (sampled on seekStart).
    * @param onSeekStart   Called once when a seek gesture begins, with the position it started from.
-   * @param onSeekEnd     Called after the 300 ms debounce settles; receives `paused` state.
+   * @param onSeekEnd     Called after the 300 ms debounce settles with the destination position
+   *                      and whether the buffer is ready at that position.
    */
   constructor(
     video: HTMLVideoElement,
     getPlayheadMs: () => number,
     onSeekStart: (fromMs: number) => void,
-    onSeekEnd: (paused: boolean) => void,
+    onSeekEnd: (toMs: number, bufferReady: boolean) => void,
   ) {
+    this._onSeekEnd = onSeekEnd;
     this._video = video;
 
     this._seekingHandler = () => {
@@ -44,7 +63,7 @@ export class VideoSeekTracker {
         this._active = false;
         if (this._pendingSeekFrom !== null) {
           this._pendingSeekFrom = null;
-          onSeekEnd(video.paused);
+          onSeekEnd(Math.round(video.currentTime * 1000), isBufferReady(video));
         }
       }, 300);
     };
@@ -56,6 +75,22 @@ export class VideoSeekTracker {
   /** True while a seek gesture is in progress (between seekStart and debounce settlement). */
   get active(): boolean {
     return this._active;
+  }
+
+  /**
+   * Force-settle any in-flight seek without waiting for the debounce.
+   * Call before emitting `ended` or `error` so the state machine exits Seeking first.
+   * @param bufferReadyOverride  When provided, overrides isBufferReady(). Pass `true` when
+   *                             the video has ended (buffer is effectively complete).
+   */
+  settle(bufferReadyOverride?: boolean): void {
+    if (this._pendingSeekFrom === null) return;
+    clearTimeout(this._debounceTimer ?? undefined);
+    this._debounceTimer = null;
+    this._active = false;
+    this._pendingSeekFrom = null;
+    const bufferReady = bufferReadyOverride ?? isBufferReady(this._video);
+    this._onSeekEnd(Math.round(this._video.currentTime * 1000), bufferReady);
   }
 
   /** Reset seek state — call when a new asset is loaded to clear any in-flight seek. */

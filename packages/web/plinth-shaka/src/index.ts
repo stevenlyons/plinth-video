@@ -55,7 +55,11 @@ export class PlinthShaka {
       video,
       () => instance.lastPlayheadMs,
       (fromMs) => instance.emit({ type: "seek", from_ms: fromMs }),
-      (paused) => { if (!paused) instance.emit({ type: "playing" }); },
+      (toMs, bufferReady) => {
+        instance.emit({ type: "seek_end", to_ms: toMs, buffer_ready: bufferReady });
+        // Replay any playing event suppressed during the debounce window.
+        if (!video.paused) instance.emit({ type: "playing" });
+      },
     );
     instance.attachShakaListeners();
     instance.attachVideoListeners();
@@ -173,12 +177,16 @@ export class PlinthShaka {
 
     const onPause: EventListener = () => {
       if (this.video.ended) return;
+      if (this.video.seeking) return; // spurious pause fired by browser/player during seek
       this.emit({ type: "pause" });
     };
     this.video.addEventListener("pause", onPause);
     this.videoHandlers.set("pause", onPause);
 
-    const onEnded: EventListener = () => this.emit({ type: "ended" });
+    const onEnded: EventListener = () => {
+      this.seekTracker.settle(true); // resolve any in-flight seek before ending the session
+      this.emit({ type: "ended" });
+    };
     this.video.addEventListener("ended", onEnded);
     this.videoHandlers.set("ended", onEnded);
 
