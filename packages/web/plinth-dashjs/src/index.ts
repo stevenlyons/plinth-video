@@ -16,7 +16,7 @@ type SessionFactory = (meta: SessionMeta, config?: PlinthConfig) => Promise<Plin
 const DashjsEvents = {
   MANIFEST_LOADING_STARTED: "manifestLoadingStarted",
   STREAM_INITIALIZED: "streamInitialized",
-  QUALITY_CHANGE_RENDERED: "qualityChangeRendered",
+  QUALITY_CHANGE_REQUESTED: "qualityChangeRequested",
   ERROR: "error",
 } as const;
 
@@ -131,7 +131,7 @@ export class PlinthDashjs {
     this.player.on(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
     this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
 
-    const onQualityChangeRendered = (e?: unknown) => {
+    const onQualityChangeRequested = (e?: unknown) => {
       const data = e as { mediaType?: string; newRepresentation?: DashjsRepresentation } | undefined;
       if (data?.mediaType !== "video" || !data.newRepresentation) return;
       const rep = data.newRepresentation;
@@ -146,8 +146,8 @@ export class PlinthDashjs {
         },
       });
     };
-    this.player.on(DashjsEvents.QUALITY_CHANGE_RENDERED, onQualityChangeRendered);
-    this.playerHandlers.set(DashjsEvents.QUALITY_CHANGE_RENDERED, onQualityChangeRendered);
+    this.player.on(DashjsEvents.QUALITY_CHANGE_REQUESTED, onQualityChangeRequested);
+    this.playerHandlers.set(DashjsEvents.QUALITY_CHANGE_REQUESTED, onQualityChangeRequested);
 
     const onError = (e?: unknown) => {
       const detail = e as { code?: unknown; message?: string } | undefined;

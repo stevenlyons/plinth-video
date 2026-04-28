@@ -14,7 +14,7 @@ const REPRESENTATIONS = [
 class FakePlayer {
   private listeners = new Map<string, Array<(e?: unknown) => void>>();
   private _source = "https://example.com/manifest.mpd";
-  // currentRepIndex drives the auto-synthesized qualityChangeRendered payload
+  // currentRepIndex drives the auto-synthesized qualityChangeRequested payload
   currentRepIndex = 1;
 
   on(event: string, handler: (e?: unknown) => void): void {
@@ -32,8 +32,8 @@ class FakePlayer {
   getSource(): string { return this._source; }
 
   fire(event: string, data?: unknown): void {
-    // Synthesize dash.js QUALITY_CHANGE_RENDERED event data automatically
-    const payload = event === "qualityChangeRendered" && data === undefined
+    // Synthesize dash.js QUALITY_CHANGE_REQUESTED event data automatically
+    const payload = event === "qualityChangeRequested" && data === undefined
       ? { mediaType: "video", newRepresentation: REPRESENTATIONS[this.currentRepIndex] }
       : data;
     for (const h of [...(this.listeners.get(event) ?? [])]) h(payload);
@@ -327,9 +327,9 @@ describe("PlinthDashjs", () => {
   });
 
   // 15
-  it("QUALITY_CHANGE_RENDERED → processEvent({ type:'quality_change', quality })", async () => {
+  it("QUALITY_CHANGE_REQUESTED → processEvent({ type:'quality_change', quality })", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("qualityChangeRendered");
+    player.fire("qualityChangeRequested");
 
     assertCalledWith(mockSession.processEvent, {
       type: "quality_change",
@@ -342,10 +342,10 @@ describe("PlinthDashjs", () => {
   });
 
   // 16
-  it("QUALITY_CHANGE_RENDERED with same quality index → quality_change emitted only once", async () => {
+  it("QUALITY_CHANGE_REQUESTED with same quality index → quality_change emitted only once", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("qualityChangeRendered");
-    player.fire("qualityChangeRendered"); // same quality index — no change
+    player.fire("qualityChangeRequested");
+    player.fire("qualityChangeRequested"); // same quality index — no change
 
     const qualityCalls = mockSession.processEvent.mock.calls.filter(
       (c) => (c.arguments[0] as any).type === "quality_change",
@@ -354,13 +354,13 @@ describe("PlinthDashjs", () => {
   });
 
   // 17
-  it("QUALITY_CHANGE_RENDERED with different quality index → quality_change emitted each time", async () => {
+  it("QUALITY_CHANGE_REQUESTED with different quality index → quality_change emitted each time", async () => {
     instance = await setup(player, video, mockSession);
-    player.fire("qualityChangeRendered"); // quality index 1 → 2_500_000 bps
+    player.fire("qualityChangeRequested"); // quality index 1 → 2_500_000 bps
 
     // swap to a lower rendition (index 0 → 800_000 bps)
     player.currentRepIndex = 0;
-    player.fire("qualityChangeRendered");
+    player.fire("qualityChangeRequested");
 
     const qualityCalls = mockSession.processEvent.mock.calls.filter(
       (c) => (c.arguments[0] as any).type === "quality_change",
