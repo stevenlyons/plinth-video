@@ -1,6 +1,6 @@
 {
   "name": "@wirevice/plinth-js",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "WebAssembly-powered Video telemetry SDK for the web — tracks playback metrics (VST, rebuffer time, played time) and reports beacons via HTTP",
   "type": "module",
   "main": "./dist/index.js",
