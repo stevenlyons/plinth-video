@@ -10,3 +10,4 @@
 - [x] [Rebuffer and Seek Buffer Tracking](docs/tdd/rebuffer-tracking.md)
 - [x] [Seek Tracking](docs/tdd/seek-tracking.md)
 - [x] [Heartbeat Inactivity Timeout](docs/tdd/heartbeat-inactivity-timeout.md)
+- [ ] [Initial Rendition on First Frame](docs/tdd/initial-rendition.md)
