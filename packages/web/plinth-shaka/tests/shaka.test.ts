@@ -323,27 +323,10 @@ describe("PlinthShaka", () => {
     assertCalledWith(mockSession.setPlayhead, 12_500);
   });
 
-  // 15. adaptation → quality_change using event's newTrack data
-  it("'adaptation' with newTrack → processEvent({ type:'quality_change', quality })", async () => {
+  // 15. adaptation → quality_change from event's newTrack data
+  it("'adaptation' → processEvent({ type:'quality_change', quality })", async () => {
     instance = await setup(player, video, mockSession);
     player.fireAdaptation(/* withEventData= */ true);
-
-    assertCalledWith(mockSession.processEvent, {
-      type: "quality_change",
-      quality: {
-        bitrate_bps: 2_500_000,
-        width: 1280,
-        height: 720,
-        framerate: "29.97",
-        codec: "avc1.4d401f",
-      },
-    });
-  });
-
-  // 15a. adaptation without newTrack → falls back to getVariantTracks()
-  it("'adaptation' without newTrack → quality_change via getVariantTracks() fallback", async () => {
-    instance = await setup(player, video, mockSession);
-    player.fireAdaptation(); // no event data — fallback path
 
     assertCalledWith(mockSession.processEvent, {
       type: "quality_change",
@@ -369,40 +352,7 @@ describe("PlinthShaka", () => {
     assert.strictEqual(qualityCalls.length, 1);
   });
 
-  // 15c. buffering(false) after quality change during stall → quality_change emitted before playing
-  it("'buffering' false after quality change during stall → quality_change then playing", async () => {
-    instance = await setup(player, video, mockSession);
-    video.fire("playing"); // hasFiredFirstFrame = true
-    player.fireBuffering(true); // stall
-    // Shaka switches to lower quality during the stall (track updated, no event fired)
-    player._tracks[0] = { active: true, bandwidth: 800_000, width: 640, height: 360, frameRate: null, videoCodec: null };
-    player.fireBuffering(false); // stall ends — fallback detects quality change
-
-    const calls = mockSession.processEvent.mock.calls.map((c) => (c.arguments[0] as any).type);
-    const qcIdx = calls.indexOf("quality_change");
-    const playingIdx = calls.lastIndexOf("playing");
-    assert.ok(qcIdx !== -1, "quality_change must be emitted");
-    assert.ok(playingIdx !== -1, "playing must be emitted");
-    assert.ok(qcIdx < playingIdx, "quality_change must precede playing");
-    assert.strictEqual((mockSession.processEvent.mock.calls[qcIdx].arguments[0] as any).quality.bitrate_bps, 800_000);
-  });
-
-  // 15d. buffering(false) with no quality change → no quality_change emitted
-  it("'buffering' false with no quality change → quality_change not emitted", async () => {
-    instance = await setup(player, video, mockSession);
-    video.fire("playing"); // hasFiredFirstFrame = true
-    player.fireAdaptation(true); // sets lastQualityBandwidth to 2_500_000
-    mockSession.processEvent.mock.resetCalls();
-    player.fireBuffering(true);
-    player.fireBuffering(false); // same active track
-
-    const qualityCalls = mockSession.processEvent.mock.calls.filter(
-      (c) => (c.arguments[0] as any).type === "quality_change",
-    );
-    assert.strictEqual(qualityCalls.length, 0);
-  });
-
-  // 15e. variantchanged (manual quality selection) → quality_change emitted
+  // 15c. variantchanged (manual quality selection) → quality_change emitted
   it("'variantchanged' → processEvent({ type:'quality_change', quality })", async () => {
     instance = await setup(player, video, mockSession);
     const newTrack = { active: true, bandwidth: 800_000, width: 640, height: 360, frameRate: 29.97, videoCodec: "avc1.4d401f" };
@@ -420,7 +370,7 @@ describe("PlinthShaka", () => {
     });
   });
 
-  // 15f. variantchanged during stall → quality_change then playing on buffering(false)
+  // 15d. variantchanged during stall → quality_change then playing on buffering(false)
   it("'variantchanged' during stall → quality_change then playing on buffering(false)", async () => {
     instance = await setup(player, video, mockSession);
     video.fire("playing"); // hasFiredFirstFrame = true

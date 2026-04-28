@@ -111,11 +111,6 @@ export class PlinthShaka {
     });
   }
 
-  private emitQualityChangeIfNeeded(): void {
-    const track = this.player.getVariantTracks().find((t) => t.active);
-    if (track) this.emitQualityForTrack(track);
-  }
-
   private attachShakaListeners(): void {
     const onLoading: EventListener = () => {
       this.hasFiredFirstFrame = false;
@@ -135,29 +130,20 @@ export class PlinthShaka {
     this.shakaHandlers.set("loaded", onLoaded);
 
     const onBuffering: EventListener = (e) => {
-      const isBuffering = (e as any).buffering as boolean;
-      if (isBuffering) {
+      if ((e as any).buffering) {
         this.emit(this.hasFiredFirstFrame ? { type: "stall" } : { type: "waiting" });
-      } else {
-        // Check for quality change that occurred during the stall before emitting playing.
-        this.emitQualityChangeIfNeeded();
-        if (!this.seekTracker.active) {
-          this.emit({ type: "playing" });
-        }
+      } else if (!this.seekTracker.active) {
+        this.emit({ type: "playing" });
       }
     };
     this.player.addEventListener("buffering", onBuffering);
     this.shakaHandlers.set("buffering", onBuffering);
 
     // adaptation fires for ABR quality switches; variantchanged fires for manual selection.
-    // Both carry newTrack in event data; fall back to getVariantTracks() when absent.
+    // Both carry newTrack directly in event data.
     const onVariantSwitch: EventListener = (e) => {
       const newTrack = (e as any).newTrack as ShakaTrack | undefined;
-      if (newTrack) {
-        this.emitQualityForTrack(newTrack);
-      } else {
-        this.emitQualityChangeIfNeeded();
-      }
+      if (newTrack) this.emitQualityForTrack(newTrack);
     };
     this.player.addEventListener("adaptation", onVariantSwitch);
     this.shakaHandlers.set("adaptation", onVariantSwitch);
