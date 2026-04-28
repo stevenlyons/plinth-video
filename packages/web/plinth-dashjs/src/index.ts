@@ -21,27 +21,20 @@ const DashjsEvents = {
 } as const;
 
 // Minimal structural interface — avoids importing dashjs in library code
-interface DashjsRepresentation {
-  bandwidth: number;
-  width?: number | null;
-  height?: number | null;
-  frameRate?: number | string | null;
-  codecs?: string | null;
+interface DashjsBitrateInfo {
+  bitrate: number;
+  width: number;
+  height: number;
+  qualityIndex: number;
 }
 
 interface DashjsPlayer {
   on(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
   off(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
   getSource(): string | null;
-  getCurrentRepresentationForType(type: "video"): DashjsRepresentation | null;
+  getBitrateInfoListFor(type: "video"): DashjsBitrateInfo[];
 }
 
-// MPEG-DASH frameRate can be a fraction string like "30000/1001"
-function parseFrameRate(fr: number | string | null | undefined): string | undefined {
-  if (fr == null) return undefined;
-  if (typeof fr === "number") return String(fr);
-  return fr || undefined;
-}
 
 export class PlinthDashjs {
   private session: PlinthSession;
@@ -50,7 +43,7 @@ export class PlinthDashjs {
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
   private seekTracker!: VideoSeekTracker;
-  private lastQualityBandwidth: number | null = null;
+  private lastQualityIndex: number | null = null;
   private destroyed = false;
   private playerHandlers = new Map<string, (e?: unknown) => void>();
   private videoHandlers = new Map<string, EventListener>();
@@ -124,7 +117,7 @@ export class PlinthDashjs {
     const onManifestLoadingStarted = () => {
       this.hasFiredFirstFrame = false;
       this.seekTracker.reset();
-      this.lastQualityBandwidth = null;
+      this.lastQualityIndex = null;
       this.emit({ type: "load", src: this.player.getSource() ?? "" });
     };
     this.player.on(DashjsEvents.MANIFEST_LOADING_STARTED, onManifestLoadingStarted);
@@ -139,19 +132,19 @@ export class PlinthDashjs {
     this.player.on(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
     this.playerHandlers.set(DashjsEvents.STREAM_INITIALIZED, onStreamInitialized);
 
-    const onQualityChangeRendered = () => {
-      const rep = this.player.getCurrentRepresentationForType("video");
-      if (!rep) return;
-      if (rep.bandwidth === this.lastQualityBandwidth) return;
-      this.lastQualityBandwidth = rep.bandwidth;
+    const onQualityChangeRendered = (e?: unknown) => {
+      const data = e as { mediaType?: string; newQuality?: number } | undefined;
+      if (data?.mediaType !== "video" || data.newQuality == null) return;
+      if (data.newQuality === this.lastQualityIndex) return;
+      this.lastQualityIndex = data.newQuality;
+      const info = this.player.getBitrateInfoListFor("video")[data.newQuality];
+      if (!info) return;
       this.emit({
         type: "quality_change",
         quality: {
-          bitrate_bps: rep.bandwidth,
-          width: rep.width ?? undefined,
-          height: rep.height ?? undefined,
-          framerate: parseFrameRate(rep.frameRate),
-          codec: rep.codecs ?? undefined,
+          bitrate_bps: info.bitrate,
+          width: info.width,
+          height: info.height,
         },
       });
     };
