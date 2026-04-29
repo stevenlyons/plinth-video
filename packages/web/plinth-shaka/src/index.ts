@@ -96,19 +96,20 @@ export class PlinthShaka {
     this.session.processEvent(event);
   }
 
+  private qualityFromTrack(track: ShakaTrack) {
+    return {
+      bitrate_bps: track.bandwidth,
+      width: track.width ?? undefined,
+      height: track.height ?? undefined,
+      framerate: track.frameRate != null ? String(track.frameRate) : undefined,
+      codec: track.videoCodec ?? undefined,
+    };
+  }
+
   private emitQualityForTrack(track: ShakaTrack): void {
     if (track.bandwidth === this.lastQualityBandwidth) return;
     this.lastQualityBandwidth = track.bandwidth;
-    this.emit({
-      type: "quality_change",
-      quality: {
-        bitrate_bps: track.bandwidth,
-        width: track.width ?? undefined,
-        height: track.height ?? undefined,
-        framerate: track.frameRate != null ? String(track.frameRate) : undefined,
-        codec: track.videoCodec ?? undefined,
-      },
-    });
+    this.emit({ type: "quality_change", quality: this.qualityFromTrack(track) });
   }
 
   private attachShakaListeners(): void {
@@ -180,7 +181,11 @@ export class PlinthShaka {
     const onPlaying: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.hasFiredFirstFrame = true;
-        this.emit({ type: "first_frame" });
+        const active = this.player.getVariantTracks().find((t) => t.active);
+        this.emit({
+          type: "first_frame",
+          ...(active ? { quality: this.qualityFromTrack(active) } : {}),
+        });
       }
     };
     this.video.addEventListener("playing", onPlaying);

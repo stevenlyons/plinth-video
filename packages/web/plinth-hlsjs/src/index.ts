@@ -158,7 +158,12 @@ export class PlinthHlsJs {
     const onPlaying: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.hasFiredFirstFrame = true;
-        this.emit({ type: "first_frame" });
+        const hls = this.hls as any;
+        const level = hls.levels?.[hls.currentLevel];
+        this.emit({
+          type: "first_frame",
+          ...(level ? { quality: { bitrate_bps: level.bitrate, width: level.width, height: level.height, codec: level.videoCodec } } : {}),
+        });
       } else if (!this.seekTracker.active) {
         this.emit({ type: "playing" });
       }

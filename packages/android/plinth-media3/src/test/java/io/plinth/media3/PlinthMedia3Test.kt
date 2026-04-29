@@ -15,6 +15,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 
@@ -117,6 +118,40 @@ class PlinthMedia3Test {
     @Test fun `handleFirstFrame sends first_frame`() {
         plinth.handleFirstFrame()
         assertThat(capturedEvents[0].jsonType()).isEqualTo("first_frame")
+    }
+
+    @Test fun `handleFirstFrame with quality serializes quality`() {
+        plinth.handleFirstFrame(QualityDto(bitrateBps = 2_500_000, width = 1280, height = 720))
+        val obj = Json.parseToJsonElement(capturedEvents[0]).jsonObject
+        assertThat(obj["type"]!!.jsonPrimitive.content).isEqualTo("first_frame")
+        val quality = obj["quality"]!!.jsonObject
+        assertThat(quality["bitrate_bps"]!!.jsonPrimitive.int).isEqualTo(2_500_000)
+        assertThat(quality["width"]!!.jsonPrimitive.int).isEqualTo(1280)
+        assertThat(quality["height"]!!.jsonPrimitive.int).isEqualTo(720)
+    }
+
+    @Test fun `handleFirstFrame without quality omits quality key`() {
+        plinth.handleFirstFrame()
+        val obj = Json.parseToJsonElement(capturedEvents[0]).jsonObject
+        assertThat(obj.containsKey("quality")).isFalse()
+    }
+
+    @Test fun `onRenderedFirstFrame with video format includes quality`() {
+        val fmt = Format.Builder()
+            .setWidth(1920).setHeight(1080).setAverageBitrate(4_000_000).build()
+        `when`(fakePlayer.videoFormat).thenReturn(fmt)
+        plinth.onRenderedFirstFrame()
+        val obj = Json.parseToJsonElement(capturedEvents[0]).jsonObject
+        val quality = obj["quality"]!!.jsonObject
+        assertThat(quality["width"]!!.jsonPrimitive.int).isEqualTo(1920)
+        assertThat(quality["height"]!!.jsonPrimitive.int).isEqualTo(1080)
+    }
+
+    @Test fun `onRenderedFirstFrame without video format omits quality`() {
+        `when`(fakePlayer.videoFormat).thenReturn(null)
+        plinth.onRenderedFirstFrame()
+        val obj = Json.parseToJsonElement(capturedEvents[0]).jsonObject
+        assertThat(obj.containsKey("quality")).isFalse()
     }
 
     @Test fun `handleRebufferRecovery sends playing`() {

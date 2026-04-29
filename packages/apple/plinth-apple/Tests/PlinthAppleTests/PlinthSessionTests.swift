@@ -39,7 +39,7 @@ final class PlinthSessionTests: XCTestCase {
         session.processEvent(.load(src: "https://example.com/video.m3u8"))
         session.processEvent(.canPlay)
         session.processEvent(.play)
-        session.processEvent(.firstFrame)
+        session.processEvent(.firstFrame())
     }
 
     // MARK: - Session lifecycle
@@ -99,7 +99,7 @@ final class PlinthSessionTests: XCTestCase {
             session.processEvent(.seekStart(fromMs: 10_000))
         }
         let last = batches.last!.beacons[0]
-        XCTAssertEqual(last.event, "seek_start")
+        XCTAssertEqual(last.event, "seek")
     }
 
     func testSeekEndBufferReadyEmitsSeekEndBeacon() {
@@ -115,7 +115,7 @@ final class PlinthSessionTests: XCTestCase {
     func testWaitingFromPlayingEmitsStall() {
         let batches = collectBeacons { session in
             reachPlaying(session)
-            session.processEvent(.waiting)
+            session.processEvent(.stall)
         }
         let last = batches.last!.beacons[0]
         XCTAssertEqual(last.event, "stall")
@@ -124,7 +124,7 @@ final class PlinthSessionTests: XCTestCase {
     func testPlayingFromRebufferingEmitsPlaying() {
         let batches = collectBeacons { session in
             reachPlaying(session)
-            session.processEvent(.waiting)
+            session.processEvent(.stall)
             session.processEvent(.playing)
         }
         let last = batches.last!.beacons[0]
@@ -216,7 +216,7 @@ final class PlinthSessionTests: XCTestCase {
 
         let seekData = try encoder.encode(PlayerEvent.seekStart(fromMs: 5_000))
         let seekJson = try JSONSerialization.jsonObject(with: seekData) as! [String: Any]
-        XCTAssertEqual(seekJson["type"] as? String, "seek_start")
+        XCTAssertEqual(seekJson["type"] as? String, "seek")
         XCTAssertEqual(seekJson["from_ms"] as? Int, 5_000)
 
         let errorData = try encoder.encode(PlayerEvent.error(code: "NET_ERR", message: "timeout", fatal: true))

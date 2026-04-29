@@ -7,7 +7,7 @@ export type PlayerEvent =
   | { type: "play" }
   | { type: "waiting" }
   | { type: "stall" }
-  | { type: "first_frame" }
+  | { type: "first_frame"; quality?: QualityLevel }
   | { type: "playing" }
   | { type: "pause" }
   | { type: "seek"; from_ms: number }

@@ -193,11 +193,23 @@ describe("PlinthDashjs", () => {
   });
 
   // 5
-  it("video 'playing' (first) → processEvent({ type:'first_frame' })", async () => {
+  it("video 'playing' (first, no prior quality event) → processEvent({ type:'first_frame' }) without quality", async () => {
     instance = await setup(player, video, mockSession);
     video.fire("playing");
 
     assertCalledWith(mockSession.processEvent, { type: "first_frame" });
+  });
+
+  // 5a. first_frame carries quality when QUALITY_CHANGE_REQUESTED fired before playing
+  it("video 'playing' (first, after qualityChangeRequested) → first_frame with quality", async () => {
+    instance = await setup(player, video, mockSession);
+    player.fire("qualityChangeRequested"); // sets lastRepresentation (index:1, 2500000, 1280×720)
+    video.fire("playing");
+
+    assertCalledWith(mockSession.processEvent, {
+      type: "first_frame",
+      quality: { bitrate_bps: 2_500_000, width: 1280, height: 720 },
+    });
   });
 
   // 6

@@ -187,8 +187,20 @@ describe("PlinthShaka", () => {
     assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
-  // 5. playing (first) → first_frame
-  it("video 'playing' (first time) → processEvent({ type:'first_frame' })", async () => {
+  // 5. playing (first) → first_frame with quality from active track
+  it("video 'playing' (first time) → processEvent({ type:'first_frame', quality })", async () => {
+    instance = await setup(player, video, mockSession);
+    video.fire("playing");
+
+    assertCalledWith(mockSession.processEvent, {
+      type: "first_frame",
+      quality: { bitrate_bps: 2_500_000, width: 1280, height: 720, framerate: "29.97", codec: "avc1.4d401f" },
+    });
+  });
+
+  // 5a. playing (first, no active track) → first_frame without quality
+  it("video 'playing' (first time, no tracks) → processEvent({ type:'first_frame' }) without quality", async () => {
+    player._tracks = [];
     instance = await setup(player, video, mockSession);
     video.fire("playing");
 

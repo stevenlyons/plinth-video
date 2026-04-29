@@ -33,7 +33,7 @@ All beacons in a batch belong to the same `play_id` and are ordered by ascending
 | `event` | Emitted when | Extra fields |
 |---|---|---|
 | `play` | User presses play (first beacon, seq=0). No `state` or `metrics`. | `video`, `client`, `sdk` |
-| `first_frame` | First video frame renders. VST is now known. | — |
+| `first_frame` | First video frame renders. VST is now known. | `quality` (optional) |
 | `playing` | Video is actively playing: emitted immediately after `first_frame` (same timestamp), after stall recovery, and after resuming from pause. | — |
 | `pause` | Playback paused by user or system. | — |
 | `seek` | Seek begins (debounced: fires once per gesture, at the start). | `seek_from_ms` |

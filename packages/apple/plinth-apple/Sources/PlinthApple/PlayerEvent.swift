@@ -8,7 +8,7 @@ public enum PlayerEvent: Encodable {
     case play
     case waiting
     case stall
-    case firstFrame
+    case firstFrame(quality: QualityLevel? = nil)
     case playing
     case pause
     case seekStart(fromMs: UInt64)
@@ -41,14 +41,17 @@ public enum PlayerEvent: Encodable {
             try container.encode("waiting", forKey: .type)
         case .stall:
             try container.encode("stall", forKey: .type)
-        case .firstFrame:
+        case .firstFrame(let quality):
             try container.encode("first_frame", forKey: .type)
+            if let quality {
+                try container.encode(quality, forKey: .quality)
+            }
         case .playing:
             try container.encode("playing", forKey: .type)
         case .pause:
             try container.encode("pause", forKey: .type)
         case .seekStart(let fromMs):
-            try container.encode("seek_start", forKey: .type)
+            try container.encode("seek", forKey: .type)
             try container.encode(fromMs, forKey: .fromMs)
         case .seekEnd(let toMs, let bufferReady):
             try container.encode("seek_end", forKey: .type)
