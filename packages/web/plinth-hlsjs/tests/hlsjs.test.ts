@@ -7,6 +7,7 @@ import type { PlinthSession } from "@wirevice/plinth-js";
 // ── Fake Hls ──────────────────────────────────────────────────────────────────
 
 class FakeHls {
+  currentLevel = 0;
   levels = [
     { bitrate: 2_500_000, width: 1280, height: 720, videoCodec: "avc1.4d401f", attrs: {} },
   ];
@@ -150,8 +151,20 @@ describe("PlinthHlsJs", () => {
     assertCalledWith(mockSession.processEvent, { type: "play" });
   });
 
-  // 4. video playing (first time) → first_frame
-  it("video 'playing' (first time) → processEvent({ type:'first_frame' })", async () => {
+  // 4. video playing (first time) → first_frame with quality from currentLevel
+  it("video 'playing' (first time) → processEvent({ type:'first_frame', quality })", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing");
+
+    assertCalledWith(mockSession.processEvent, {
+      type: "first_frame",
+      quality: { bitrate_bps: 2_500_000, width: 1280, height: 720, codec: "avc1.4d401f" },
+    });
+  });
+
+  // 4a. video playing (first time, no level available) → first_frame without quality
+  it("video 'playing' (first time, currentLevel=-1) → processEvent({ type:'first_frame' }) without quality", async () => {
+    hls.currentLevel = -1;
     instance = await setup(hls, video, mockSession);
     video.fire("playing");
 

@@ -46,7 +46,9 @@ internal object WaitingEvent : PlayerEventDto()
 internal object StallEvent : PlayerEventDto()
 
 @Serializable @SerialName("first_frame")
-internal object FirstFrameEvent : PlayerEventDto()
+internal data class FirstFrameEvent(
+    val quality: QualityDto? = null,
+) : PlayerEventDto()
 
 @Serializable @SerialName("playing")
 internal object PlayingEvent : PlayerEventDto()
@@ -230,9 +232,9 @@ class PlinthMedia3 private constructor(
     internal fun handlePlay() = sendEvent(PlayEvent)
     internal fun handleWaiting() = sendEvent(WaitingEvent)
     internal fun handleStall() = sendEvent(StallEvent)
-    internal fun handleFirstFrame() {
+    internal fun handleFirstFrame(quality: QualityDto? = null) {
         hasFiredFirstFrame = true
-        sendEvent(FirstFrameEvent)
+        sendEvent(FirstFrameEvent(quality = quality))
     }
     internal fun handleRebufferRecovery() = sendEvent(PlayingEvent)
     internal fun handlePause() = sendEvent(PauseEvent)
@@ -273,7 +275,17 @@ class PlinthMedia3 private constructor(
     }
 
     override fun onRenderedFirstFrame() {
-        if (!hasFiredFirstFrame) handleFirstFrame()
+        if (!hasFiredFirstFrame) {
+            val fmt = player.videoFormat
+            val quality = if (fmt != null) {
+                QualityDto(
+                    bitrateBps = fmt.bitrate.takeIf { it > 0 },
+                    width = fmt.width.takeIf { it > 0 },
+                    height = fmt.height.takeIf { it > 0 },
+                )
+            } else null
+            handleFirstFrame(quality)
+        }
     }
 
     override fun onPlayerError(error: PlaybackException) {

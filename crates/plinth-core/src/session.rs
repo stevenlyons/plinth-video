@@ -271,9 +271,33 @@ impl Session {
             // FirstFrame or Playing from PlayAttempt/Buffering → Playing.
             // On first play (vst_ms not yet set): record VST, emit first_frame then playing.
             // On subsequent Playing events (vst_ms already set): no beacons (already playing).
-            (PlayerState::PlayAttempt, PlayerEvent::FirstFrame)
-            | (PlayerState::PlayAttempt, PlayerEvent::Playing)
-            | (PlayerState::Buffering, PlayerEvent::FirstFrame)
+            (PlayerState::PlayAttempt, PlayerEvent::FirstFrame { quality })
+            | (PlayerState::Buffering, PlayerEvent::FirstFrame { quality }) => {
+                self.played_tracker.start(now_ms);
+                self.state = PlayerState::Playing;
+                if self.vst_ms.is_none() {
+                    let vst = now_ms.saturating_sub(self.play_attempt_ts.unwrap_or(now_ms));
+                    self.vst_ms = Some(vst);
+                    let m = self.snapshot_metrics(now_ms);
+                    let mut b = self.make_beacon(
+                        BeaconEvent::FirstFrame,
+                        Some(PlayerState::Playing),
+                        Some(m.clone()),
+                        now_ms,
+                    );
+                    b.quality = quality;
+                    out.push(b);
+                    // Immediately follow first_frame with playing to signal active playback.
+                    let b2 = self.make_beacon(
+                        BeaconEvent::Playing,
+                        Some(PlayerState::Playing),
+                        Some(m),
+                        now_ms,
+                    );
+                    out.push(b2);
+                }
+            }
+            (PlayerState::PlayAttempt, PlayerEvent::Playing)
             | (PlayerState::Buffering, PlayerEvent::Playing) => {
                 self.played_tracker.start(now_ms);
                 self.state = PlayerState::Playing;
@@ -288,7 +312,6 @@ impl Session {
                         now_ms,
                     );
                     out.push(b);
-                    // Immediately follow first_frame with playing to signal active playback.
                     let b2 = self.make_beacon(
                         BeaconEvent::Playing,
                         Some(PlayerState::Playing),
@@ -755,7 +778,7 @@ mod tests {
         all.extend(s.process_event(PlayerEvent::Load { src: "http://example.com/video.m3u8".to_string() }, t));
         all.extend(s.process_event(PlayerEvent::CanPlay, t));
         all.extend(s.process_event(PlayerEvent::Play, t));
-        all.extend(s.process_event(PlayerEvent::FirstFrame, t + 1000));
+        all.extend(s.process_event(PlayerEvent::FirstFrame { quality: None }, t + 1000));
         all
     }
 
@@ -802,7 +825,7 @@ mod tests {
         s.process_event(PlayerEvent::Play, 200);   // play_attempt_ts must be 200
         s.process_event(PlayerEvent::CanPlay, 1500);
         // First frame arrives shortly after CanPlay
-        let beacons = s.process_event(PlayerEvent::FirstFrame, 1600);
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: None }, 1600);
         let ff = beacons.iter().find(|b| b.event == BeaconEvent::FirstFrame).unwrap();
         let vst = ff.metrics.as_ref().unwrap().vst_ms.unwrap();
         // vst_ms = first_frame_ts - play_ts = 1600 - 200 = 1400
@@ -888,7 +911,7 @@ mod tests {
         s.process_event(PlayerEvent::CanPlay, 0);
         s.process_event(PlayerEvent::Play, 0);
         s.process_event(PlayerEvent::Waiting, 0); // → Buffering
-        let beacons = s.process_event(PlayerEvent::FirstFrame, 1500);
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: None }, 1500);
         assert_eq!(s.state(), PlayerState::Playing);
         // first_frame + playing
         assert_eq!(beacons.len(), 2);
@@ -1208,7 +1231,7 @@ mod tests {
         // play beacon has no metrics
         assert!(beacons[0].metrics.is_none());
         // simulate first_frame 1.3s later → emits first_frame + playing
-        let beacons = s.process_event(PlayerEvent::FirstFrame, 1300);
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: None }, 1300);
         assert_eq!(beacons[0].event, BeaconEvent::FirstFrame);
         let m = beacons[0].metrics.as_ref().unwrap();
         assert_eq!(m.vst_ms, Some(1300));
@@ -1278,7 +1301,7 @@ mod tests {
         s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
         s.process_event(PlayerEvent::CanPlay, 0);
         s.process_event(PlayerEvent::Play, 1_708_646_400_000);
-        let beacons = s.process_event(PlayerEvent::FirstFrame, 1_708_646_401_280);
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: None }, 1_708_646_401_280);
         // beacons[0] = first_frame, beacons[1] = playing
         let b = &beacons[0];
         let json = miniserde::json::to_string(b);
@@ -1590,7 +1613,7 @@ mod tests {
         let b1 = s.process_event(PlayerEvent::Play, 0);
         let id1 = b1[0].play_id.clone();
 
-        s.process_event(PlayerEvent::FirstFrame, 1000);
+        s.process_event(PlayerEvent::FirstFrame { quality: None }, 1000);
         s.process_event(PlayerEvent::Ended, 5000);
 
         let b2 = s.process_event(PlayerEvent::Play, 6000);
@@ -1854,7 +1877,7 @@ mod tests {
         let play_id = all[0].play_id.clone();
 
         // FirstFrame → first_frame (seq=1) + playing (seq=2)
-        all.extend(s.process_event(PlayerEvent::FirstFrame, 1_200));
+        all.extend(s.process_event(PlayerEvent::FirstFrame { quality: None }, 1_200));
         // Pause → Paused (pause, seq=3)
         all.extend(s.process_event(PlayerEvent::Pause, 5_000));
         // Resume → PlayAttempt (playing, seq=4)
@@ -2209,7 +2232,7 @@ mod tests {
         s.process_event(PlayerEvent::Load { src: "retry.m3u8".into() }, 66_000);
         s.process_event(PlayerEvent::CanPlay, 66_000);
         s.process_event(PlayerEvent::Play, 66_000);
-        s.process_event(PlayerEvent::FirstFrame, 67_000);
+        s.process_event(PlayerEvent::FirstFrame { quality: None }, 67_000);
         let beacons = s.tick(77_001);
         assert_eq!(beacons.len(), 1, "heartbeat should fire after resuming from reset timer");
     }
@@ -2227,6 +2250,57 @@ mod tests {
         // 30s more — only 30s since resume, well under 60s; should heartbeat.
         let beacons = s.tick(41_001);
         assert_eq!(beacons.len(), 1, "heartbeat should fire after timer cleared on resume");
+    }
+
+    // ── Initial rendition on first_frame ─────────────────────────────────────
+
+    #[test]
+    fn first_frame_beacon_carries_quality_when_provided() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        let quality = QualityLevel {
+            bitrate_bps: Some(2_500_000),
+            width: Some(1280),
+            height: Some(720),
+            framerate: Some("29.97".to_string()),
+            codec: Some("avc1.4d401f".to_string()),
+        };
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: Some(quality) }, 1000);
+        let ff = beacons.iter().find(|b| b.event == BeaconEvent::FirstFrame).unwrap();
+        let q = ff.quality.as_ref().expect("first_frame beacon must carry quality");
+        assert_eq!(q.bitrate_bps, Some(2_500_000));
+        assert_eq!(q.width, Some(1280));
+        assert_eq!(q.height, Some(720));
+        assert_eq!(q.framerate.as_deref(), Some("29.97"));
+        assert_eq!(q.codec.as_deref(), Some("avc1.4d401f"));
+    }
+
+    #[test]
+    fn first_frame_beacon_omits_quality_when_none() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: None }, 1000);
+        let ff = beacons.iter().find(|b| b.event == BeaconEvent::FirstFrame).unwrap();
+        assert!(ff.quality.is_none(), "first_frame beacon must not carry quality when None");
+    }
+
+    #[test]
+    fn first_frame_quality_does_not_appear_on_following_playing_beacon() {
+        let mut s = make_session();
+        s.process_event(PlayerEvent::Load { src: "x".into() }, 0);
+        s.process_event(PlayerEvent::CanPlay, 0);
+        s.process_event(PlayerEvent::Play, 0);
+        let quality = QualityLevel {
+            bitrate_bps: Some(2_500_000),
+            width: None, height: None, framerate: None, codec: None,
+        };
+        let beacons = s.process_event(PlayerEvent::FirstFrame { quality: Some(quality) }, 1000);
+        let playing = beacons.iter().find(|b| b.event == BeaconEvent::Playing).unwrap();
+        assert!(playing.quality.is_none(), "playing beacon must not carry quality");
     }
 
     /// destroy() always emits its final beacon even when heartbeats are suppressed.

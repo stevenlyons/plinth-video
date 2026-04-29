@@ -82,6 +82,12 @@
           }
         },
         {
+          "if": { "properties": { "event": { "const": "first_frame" } }, "required": ["event"] },
+          "then": {
+            "properties": { "quality": { "$ref": "#/$defs/QualityLevel" } }
+          }
+        },
+        {
           "if": { "properties": { "event": { "const": "quality_change" } }, "required": ["event"] },
           "then": {
             "required": ["quality"],
@@ -255,7 +261,7 @@
 
     "QualityLevel": {
       "type": "object",
-      "description": "Rendition quality at the time of a quality_change event.",
+      "description": "Rendition quality snapshot. Present on quality_change (required) and first_frame (optional, when the integration can determine the initial rendition).",
       "properties": {
         "bitrate_bps": { "type": "integer", "minimum": 0, "description": "Selected rendition bitrate in bits per second." },
         "width":       { "type": "integer", "minimum": 0, "description": "Video width in pixels." },

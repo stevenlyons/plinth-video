@@ -195,7 +195,20 @@ public final class PlinthAVPlayer {
 
     internal func handleFirstFrame() {
         hasFiredFirstFrame = true
-        session?.processEvent(.firstFrame)
+        session?.processEvent(.firstFrame(quality: currentQuality()))
+    }
+
+    private func currentQuality() -> QualityLevel? {
+        guard let item = player.currentItem else { return nil }
+        let size = item.presentationSize
+        guard size != .zero else { return nil }
+        let bitrateRaw = item.accessLog()?.events.last?.indicatedBitrate ?? -1
+        let bitrate: Int? = bitrateRaw > 0 ? Int(bitrateRaw) : nil
+        return QualityLevel(
+            bitrateBps: bitrate,
+            width: Int(size.width),
+            height: Int(size.height)
+        )
     }
 
     internal func handleRebufferRecovery() {

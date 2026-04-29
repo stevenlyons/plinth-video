@@ -16,7 +16,7 @@ pub enum PlayerEvent {
     /// Buffer exhausted mid-playback (stall): Playing → Rebuffering.
     Stall,
     /// First decoded frame rendered (once per session): PlayAttempt/Buffering → Playing.
-    FirstFrame,
+    FirstFrame { quality: Option<QualityLevel> },
     /// Media `playing` event — fires on any resume (rebuffer recovery or resume from pause).
     /// PlayAttempt/Buffering → Playing (no first_frame beacon if vst already set);
     /// Rebuffering → Playing (emits stall_end beacon).
@@ -104,7 +104,9 @@ impl<'a> miniserde::de::Map for PlayerEventMap<'a> {
             "play" => PlayerEvent::Play,
             "waiting" => PlayerEvent::Waiting,
             "stall" => PlayerEvent::Stall,
-            "first_frame" => PlayerEvent::FirstFrame,
+            "first_frame" => PlayerEvent::FirstFrame {
+                quality: self.quality.take(),
+            },
             "playing" => PlayerEvent::Playing,
             "pause" => PlayerEvent::Pause,
             "seek" => PlayerEvent::Seek {
