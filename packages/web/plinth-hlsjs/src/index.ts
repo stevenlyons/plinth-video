@@ -21,6 +21,7 @@ export class PlinthHlsJs {
   private video: HTMLVideoElement;
   private lastPlayheadMs = 0;
   private hasFiredFirstFrame = false;
+  private lastQualityBitrate: number | null = null;
   private seekTracker!: VideoSeekTracker;
   private destroyed = false;
   private hlsHandlers = new Map<string, HlsHandler>();
@@ -101,6 +102,7 @@ export class PlinthHlsJs {
   private attachHlsListeners(): void {
     const onManifestLoading: HlsHandler = (_event, data) => {
       this.hasFiredFirstFrame = false;
+      this.lastQualityBitrate = null;
       this.emit({ type: "load", src: data.url as string });
     };
     this.hls.on(Events.MANIFEST_LOADING, onManifestLoading as any);
@@ -118,6 +120,8 @@ export class PlinthHlsJs {
     const onLevelSwitched: HlsHandler = (_event, data) => {
       const level = (this.hls as any).levels[data.level as number];
       if (!level) return;
+      if (level.bitrate === this.lastQualityBitrate) return;
+      this.lastQualityBitrate = level.bitrate;
       this.emit({
         type: "quality_change",
         quality: {
@@ -160,6 +164,7 @@ export class PlinthHlsJs {
         this.hasFiredFirstFrame = true;
         const hls = this.hls as any;
         const level = hls.levels?.[hls.currentLevel];
+        if (level) this.lastQualityBitrate = level.bitrate;
         this.emit({
           type: "first_frame",
           ...(level ? { quality: { bitrate_bps: level.bitrate, width: level.width, height: level.height, codec: level.videoCodec } } : {}),

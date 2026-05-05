@@ -31,6 +31,11 @@ class FakePlayer {
 
   getSource(): string { return this._source; }
 
+  getCurrentRepresentationForType(type: string): unknown {
+    if (type !== "video" || this.currentRepIndex < 0) return null;
+    return REPRESENTATIONS[this.currentRepIndex] ?? null;
+  }
+
   fire(event: string, data?: unknown): void {
     // Synthesize dash.js QUALITY_CHANGE_REQUESTED event data automatically
     const payload = event === "qualityChangeRequested" && data === undefined
@@ -192,24 +197,41 @@ describe("PlinthDashjs", () => {
     assertCalledWith(mockSession.processEvent, { type: "playing" });
   });
 
-  // 5
-  it("video 'playing' (first, no prior quality event) → processEvent({ type:'first_frame' }) without quality", async () => {
+  // 5. first_frame omits quality when getCurrentRepresentationForType returns null
+  it("video 'playing' (first, no current representation) → processEvent({ type:'first_frame' }) without quality", async () => {
+    player.currentRepIndex = -1; // simulate no current representation available
     instance = await setup(player, video, mockSession);
     video.fire("playing");
 
     assertCalledWith(mockSession.processEvent, { type: "first_frame" });
   });
 
-  // 5a. first_frame carries quality when QUALITY_CHANGE_REQUESTED fired before playing
-  it("video 'playing' (first, after qualityChangeRequested) → first_frame with quality", async () => {
+  // 5a. first_frame carries quality read directly from getCurrentRepresentationForType
+  it("video 'playing' (first, current representation available) → first_frame with quality", async () => {
+    player.currentRepIndex = 1; // REPRESENTATIONS[1]: 2_500_000 bps, 1280×720
     instance = await setup(player, video, mockSession);
-    player.fire("qualityChangeRequested"); // sets lastRepresentation (index:1, 2500000, 1280×720)
     video.fire("playing");
 
     assertCalledWith(mockSession.processEvent, {
       type: "first_frame",
       quality: { bitrate_bps: 2_500_000, width: 1280, height: 720 },
     });
+  });
+
+  // 5b. quality_change for same index as captured at first_frame → suppressed
+  it("QUALITY_CHANGE_REQUESTED for same index as first_frame → quality_change NOT emitted", async () => {
+    player.currentRepIndex = 1; // first_frame will capture index 1
+    instance = await setup(player, video, mockSession);
+    video.fire("playing");
+    mockSession.processEvent.mock.resetCalls();
+    // ABR fires qualityChangeRequested for same index — should be deduped
+    player.currentRepIndex = 1;
+    player.fire("qualityChangeRequested");
+
+    const qualityChangeCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "quality_change",
+    );
+    assert.strictEqual(qualityChangeCalls.length, 0, "quality_change must not duplicate first_frame quality");
   });
 
   // 6

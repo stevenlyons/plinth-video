@@ -309,6 +309,33 @@ describe("PlinthHlsJs", () => {
     });
   });
 
+  // 13a. LEVEL_SWITCHED after first_frame with same bitrate → suppressed (no duplicate quality_change)
+  it("LEVEL_SWITCHED with same bitrate as first_frame quality → quality_change NOT emitted", async () => {
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // first_frame captures level 0 (2_500_000 bps)
+    mockSession.processEvent.mock.resetCalls();
+    hls.emit(Events.LEVEL_SWITCHED, { level: 0 }); // same level — should be suppressed
+
+    const qualityChangeCalls = mockSession.processEvent.mock.calls.filter(
+      (c) => (c.arguments[0] as any).type === "quality_change",
+    );
+    assert.strictEqual(qualityChangeCalls.length, 0, "quality_change must not duplicate first_frame quality");
+  });
+
+  // 13b. LEVEL_SWITCHED to different bitrate after first_frame → quality_change emitted
+  it("LEVEL_SWITCHED to different bitrate after first_frame → quality_change emitted", async () => {
+    hls.levels.push({ bitrate: 5_000_000, width: 1920, height: 1080, videoCodec: "avc1.640028", attrs: {} });
+    instance = await setup(hls, video, mockSession);
+    video.fire("playing"); // first_frame captures level 0 (2_500_000 bps)
+    mockSession.processEvent.mock.resetCalls();
+    hls.emit(Events.LEVEL_SWITCHED, { level: 1 }); // different level
+
+    assertCalledWith(mockSession.processEvent, {
+      type: "quality_change",
+      quality: { bitrate_bps: 5_000_000, width: 1920, height: 1080, codec: "avc1.640028" },
+    });
+  });
+
   // 14. ERROR fatal → error event
   it("ERROR (fatal) → processEvent({ type:'error', fatal:true })", async () => {
     instance = await setup(hls, video, mockSession);

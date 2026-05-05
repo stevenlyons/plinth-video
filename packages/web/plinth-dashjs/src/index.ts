@@ -32,6 +32,7 @@ interface DashjsPlayer {
   on(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
   off(event: string, handler: (e?: unknown) => void, scope?: unknown): void;
   getSource(): string | null;
+  getCurrentRepresentationForType(type: string): DashjsRepresentation | null;
 }
 
 
@@ -43,7 +44,6 @@ export class PlinthDashjs {
   private hasFiredFirstFrame = false;
   private seekTracker!: VideoSeekTracker;
   private lastQualityIndex: number | null = null;
-  private lastRepresentation: DashjsRepresentation | null = null;
   private destroyed = false;
   private playerHandlers = new Map<string, (e?: unknown) => void>();
   private videoHandlers = new Map<string, EventListener>();
@@ -118,7 +118,6 @@ export class PlinthDashjs {
       this.hasFiredFirstFrame = false;
       this.seekTracker.reset();
       this.lastQualityIndex = null;
-      this.lastRepresentation = null;
       this.emit({ type: "load", src: this.player.getSource() ?? "" });
     };
     this.player.on(DashjsEvents.MANIFEST_LOADING_STARTED, onManifestLoadingStarted);
@@ -139,7 +138,6 @@ export class PlinthDashjs {
       const rep = data.newRepresentation;
       if (rep.index === this.lastQualityIndex) return;
       this.lastQualityIndex = rep.index;
-      this.lastRepresentation = rep;
       this.emit({
         type: "quality_change",
         quality: {
@@ -174,7 +172,8 @@ export class PlinthDashjs {
     const onPlaying: EventListener = () => {
       if (!this.hasFiredFirstFrame) {
         this.hasFiredFirstFrame = true;
-        const rep = this.lastRepresentation;
+        const rep = this.player.getCurrentRepresentationForType("video");
+        if (rep) this.lastQualityIndex = rep.index;
         this.emit({
           type: "first_frame",
           ...(rep ? { quality: { bitrate_bps: rep.bandwidth, width: rep.width, height: rep.height } } : {}),
